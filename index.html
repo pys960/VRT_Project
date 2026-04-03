@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>K7 A권역 점검현황지도</title>
+    
+    <script type="text/javascript" src="https://openapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=enxsrn2016&submodules=panorama,geocoder,drawing,visualization"></script>
+    <script type="text/javascript" src="https://navermaps.github.io/maps.js.ncp/docs/js/MarkerClustering.js"></script>
+    
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family: 'Pretendard', sans-serif; }
+        #map { width: 100%; height: 100vh; background-color: #eee; }
+        
+        #search-container {
+            position: absolute; top: 15px; left: 50%; transform: translateX(-50%); 
+            z-index: 2000; width: 90%; max-width: 450px;
+        }
+        #search-box { display: flex; gap: 6px; width: 100%; }
+        .input-wrapper { position: relative; flex: 1; display: flex; align-items: center; }
+        #address-input {
+            width: 100%; padding: 12px 15px; border-radius: 10px; border: 1px solid #ddd;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15); outline: none; font-size: 14px;
+        }
+        #clear-btn {
+            position: absolute; right: 10px; cursor: pointer; display: none;
+            width: 22px; height: 22px; background: #bbb; color: white;
+            border-radius: 50%; text-align: center; line-height: 20px; font-size: 16px; border: none;
+        }
+        #search-btn {
+            padding: 10px 18px; background: #03C75A; color: white; border: none;
+            border-radius: 10px; cursor: pointer; font-weight: bold; font-size: 14px;
+        }
+
+        #autocomplete-list {
+            background: white; border-radius: 10px; margin-top: 5px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2); max-height: 350px; overflow-y: auto;
+            display: none; border: 1px solid #ddd;
+        }
+        .suggestion-item { padding: 12px 15px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 13px; display: flex; align-items: center; gap: 8px; line-height: 1.4; }
+        .suggestion-item:hover { background-color: #f4f4f4; }
+        .type-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: bold; color: white; flex-shrink: 0; }
+        .badge-geo { background: #03C75A; } .badge-store { background: #007AFF; }
+
+        #count-bar {
+            position: absolute; bottom: 25px; left: 50%; transform: translateX(-50%);
+            z-index: 1500; background: rgba(33, 33, 33, 0.9); color: white;
+            padding: 10px 25px; border-radius: 30px; font-size: 13px; font-weight: bold;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3); pointer-events: none;
+        }
+
+        #controls {
+            position: absolute; top: 15px; right: 15px; z-index: 1000;
+            background: white; padding: 15px; border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15); border: 1px solid #ddd;
+            display: flex; flex-direction: column; gap: 10px; width: 190px;
+        }
+        .control-item { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; }
+        
+        #dashboard { border-top: 1px dashed #ddd; padding-top: 10px; margin-top: 5px; }
+        .dash-box { background: #f8f9fa; padding: 10px; border-radius: 8px; border: 1px solid #eee; margin-bottom: 8px; }
+        .dash-title { font-size: 11px; color: #666; font-weight: bold; margin-bottom: 3px; }
+        .dash-val { font-size: 16px; font-weight: 800; color: #03C75A; }
+        .dash-sub { font-size: 10px; color: #999; }
+
+        .marker-label {
+            position: absolute; top: 28px; left: 50%; transform: translateX(-45%);
+            background: white; padding: 2px 8px; border: 1px solid #666;
+            border-radius: 12px; font-size: 11px; font-weight: bold; color: #333;
+            white-space: nowrap; box-shadow: 1px 1px 3px rgba(0,0,0,0.2);
+            opacity: 0; transition: opacity 0.2s; pointer-events: none;
+        }
+        .force-show { opacity: 1 !important; z-index: 100; }
+
+        .info-box { padding: 15px; min-width: 260px; line-height: 1.6; }
+        .info-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 2px solid #eee; padding-bottom: 8px; }
+        .info-title { font-size: 16px; font-weight: bold; }
+        .info-item { font-size: 13px; color: #444; margin-bottom: 5px; display: flex; align-items: flex-start; }
+        .info-label { font-weight: bold; color: #666; width: 52px; display: inline-flex; justify-content: space-between; flex-shrink: 0; margin-right: 5px; }
+        .info-data { margin-left: 10px; display: inline-block; flex: 1; color: #333; }
+        .note-highlight { color: #d32f2f; font-weight: bold; }
+        
+        .btn-group { display: flex; gap: 4px; margin-top: 15px; }
+        .nav-btn { flex: 1; padding: 9px 0; border-radius: 6px; font-size: 11px; font-weight: bold; text-align: center; text-decoration: none; color: #fff; }
+        .btn-naver { background: #03C75A; } .btn-kakao { background: #FEE500; color: #3C1E1E; }
+        .btn-tmap { background: #ff6b00; } 
+        
+        .sheet-btn-outer { 
+            display: block; width: 100%; padding: 10px 0; background: #1D6F42; color: white; 
+            text-decoration: none; font-size: 13px; border-radius: 8px; font-weight: bold; 
+            text-align: center; margin-bottom: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .sheet-btn-outer:hover { background: #155231; }
+
+        /* [요청] 내 위치 아이콘 버튼 스타일 */
+        #mylocation-btn {
+            position: absolute; bottom: 80px; right: 80px; z-index: 1000;
+            width: 50px; height: 50px; background: #fff; border: 1px solid #ccc;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.2); transition: background 0.2s;
+        }
+        #mylocation-btn:hover { background: #f8f8f8; }
+        #mylocation-btn svg { width: 22px; height: 22px; fill: #444; }
+    </style>
+</head>
+<body>
+
+    <div id="search-container">
+        <div id="search-box">
+            <div class="input-wrapper">
+                <input type="text" id="address-input" placeholder="행정구역, 점포명 또는 주소 검색" autocomplete="off">
+                <button id="clear-btn">&times;</button>
+            </div>
+            <button id="search-btn">검색</button>
+        </div>
+        <div id="autocomplete-list"></div>
+    </div>
+
+    <div id="count-bar">데이터 로딩 중...</div>
+
+    <button id="mylocation-btn" title="내 위치로 이동">
+        <svg viewBox="0 0 24 24">
+            <path d="M12,8A4,4 0 0,1 16,12A4,4 0 0,1 12,16A4,4 0 0,1 8,12A4,4 0 0,1 12,8M12,10A2,2 0 0,0 10,12A2,2 0 0,0 12,14A2,2 0 0,0 14,12A2,2 0 0,0 12,10M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4Z" />
+        </svg>
+    </button>
+
+    <div id="controls">
+        <a href="https://docs.google.com/spreadsheets/d/1-AAKcZzy8aXcyCpganxHuSKy36E1mp_La5u31m3M9q4/edit" target="_blank" class="sheet-btn-outer">📊 구글 시트로 이동</a>
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 2px 0;">        
+        <div class="control-item"><input type="checkbox" id="showCompleted"><label for="showCompleted">✅ 점검 완료 점포</label></div>
+        <div class="control-item"><input type="checkbox" id="showExcluded"><label for="showExcluded">🔘 점검 제외 점포</label></div>
+        <div class="control-item"><input type="checkbox" id="showLabels" checked><label for="showLabels">🏷️ 점포 이름표 </label></div>
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 2px 0;">        
+
+        <div id="dashboard">
+            <div class="dash-box">
+                <div class="dash-title">🏢 전체 진행률</div>
+                <div id="total-prog" class="dash-val">0%</div>
+                <div id="total-count" class="dash-sub">0 / 0</div>
+            </div>
+            <div id="area-dash-box" class="dash-box" style="display:none; border-color:#007AFF;">
+                <div id="area-title" class="dash-title" style="color:#007AFF;">📍 구역 내 진행률</div>
+                <div id="area-prog" class="dash-val" style="color:#007AFF;">0%</div>
+                <div id="area-count" class="dash-sub">0 / 0</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="map"></div>
+
+    <script>
+        const CONFIG = {
+            SHEET_ID: '1-AAKcZzy8aXcyCpganxHuSKy36E1mp_La5u31m3M9q4',
+            RANGE: 'A4:K4500',
+            LIMIT_DISTANCE: 10000,
+            VWORLD_KEY: '75E92F21-B180-3443-9876-74919A1B3C83' 
+        };
+
+        let naverMap, allMarkers = [], markerClustering, activeInfoWindow = null, currentPolygon = null;
+        let myLocationMarker = null; // 내 위치 마커 전역 변수
+        let isSearchMode = false, lastSearchResults = [];
+        let stats = { total: 0, complete: 0 };
+
+        function getCoreUnit(fullText) {
+            const words = fullText.split(' ');
+            const core = words.reverse().find(w => w.endsWith('구') || w.endsWith('시') || w.endsWith('군'));
+            return core || fullText;
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr || dateStr === "-") return "-";
+            const match = dateStr.match(/Date\((\d+),(\d+),(\d+)\)/);
+            if (match) return `${match[1]}. ${Number(match[2]) + 1}. ${match[3]}`;
+            return dateStr;
+        }
+
+        // [추가] 내 위치 찾기 및 마커 표시 함수
+        function findMyLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition((position) => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    const nowPos = new naver.maps.LatLng(lat, lng);
+
+                    naverMap.setCenter(nowPos);
+                    naverMap.setZoom(16);
+
+                    if (myLocationMarker) {
+                        myLocationMarker.setPosition(nowPos);
+                    } else {
+                        myLocationMarker = new naver.maps.Marker({
+                            position: nowPos,
+                            map: naverMap,
+                            icon: {
+                                content: '<div style="width:18px;height:18px;background:#007AFF;border:3px solid white;border-radius:50%;box-shadow:0 0 8px rgba(0,0,0,0.4);"></div>',
+                                anchor: new naver.maps.Point(9, 9)
+                            }
+                        });
+                    }
+                }, () => { alert("위치 정보를 가져올 수 없습니다. 권한을 확인해주세요."); });
+            } else { alert("이 브라우저에서는 위치 서비스를 지원하지 않습니다."); }
+        }
+
+        async function initMap() {
+            naverMap = new naver.maps.Map('map', { center: new naver.maps.LatLng(37.5665, 126.9780), zoom: 12, zoomControl: true });
+            naver.maps.Event.addListener(naverMap, 'click', () => {
+                if (activeInfoWindow) { activeInfoWindow.close(); activeInfoWindow = null; }
+                document.getElementById('autocomplete-list').style.display = 'none';
+            });
+            naver.maps.Event.addListener(naverMap, 'idle', updateFilters);
+
+            // [추가] 내 위치 버튼 이벤트 연결
+            document.getElementById('mylocation-btn').addEventListener('click', findMyLocation);
+
+            const url = `https://docs.google.com/spreadsheets/d/${CONFIG.SHEET_ID}/gviz/tq?tqx=out:json&range=${CONFIG.RANGE}`;
+
+            try {
+                const response = await fetch(url);
+                const text = await response.text();
+                const jsonData = JSON.parse(text.substring(47).slice(0, -2));
+                const rows = jsonData.table.rows;
+
+                rows.forEach((row) => {
+                    const getValue = (idx) => (row.c[idx] && row.c[idx].v !== null) ? String(row.c[idx].v).trim() : "-";
+                    const code = getValue(0), name = getValue(1), addr = getValue(2), note = getValue(3);
+                    const asset = getValue(4), status = getValue(6), date = formatDate(getValue(7));
+                    const lat = row.c[9]?.v, lng = row.c[10]?.v;
+
+                    if (name !== "-" && lat && lng) {
+                        stats.total++;
+                        const isFinished = status !== "미완료" && status !== "-";
+                        if (isFinished) stats.complete++;
+
+                        let markerColor = "#d32f2f", type = "normal";
+                        if (['휴점','제외','리뉴얼','폐점'].some(k => status.includes(k))) { markerColor = "#888"; type = "excluded"; }
+                        else if (isFinished) { markerColor = "#2e7d32"; type = "completed"; }
+
+                        const marker = new naver.maps.Marker({
+                            position: new naver.maps.LatLng(lat, lng),
+                            icon: {
+                                content: `<div class="marker-container" style="position:relative;"><svg width="25" height="25" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22C12 22 19 14.25 19 9C19 5.13 15.87 2 12 2Z" fill="${markerColor}" stroke="white" stroke-width="1.5"/><circle cx="12" cy="9" r="3" fill="white"/></svg><div class="marker-label" style="border-color:${markerColor}">${name}</div></div>`,
+                                anchor: new naver.maps.Point(12, 25)
+                            }
+                        });
+
+                        const info = new naver.maps.InfoWindow({
+                            content: `<div class="info-box">
+                                <div class="info-header"><div class="info-title" style="color:${markerColor}">[${code}] ${name}</div></div>
+                                <div class="info-item"><span class="info-label"><span>주</span><span>소</span></span>: <span class="info-data">${addr}</span></div>
+                                <div class="info-item"><span class="info-label"><span>특</span><span>이</span><span>사</span><span>항</span></span>: <span class="info-data note-highlight">${note}</span></div>
+                                <div class="info-item"><span class="info-label"><span>점</span><span>검</span><span>여</span><span>부</span></span>: <span class="info-data">${status}</span></div>
+                                <div class="info-item"><span class="info-label"><span>점</span><span>검</span><span>일</span></span>: <span class="info-data">${date}</span></div>
+                                <div class="info-item"><span class="info-label"><span>자</span><span>산</span><span>라</span><span>벨</span></span>: <span class="info-data">${asset}</span></div>
+                                <div class="btn-group">
+                                    <a href="https://map.naver.com/v5/directions//${encodeURIComponent(name)},${lat},${lng},,,/mode/car" target="_blank" class="nav-btn btn-naver">네이버</a>
+                                    <a href="https://map.kakao.com/link/to/${encodeURIComponent(name)},${lat},${lng}" target="_blank" class="nav-btn btn-kakao">카카오</a>
+                                    <a href="tmap://route?rName=${encodeURIComponent(name)}&rLat=${lat}&rLon=${lng}" class="nav-btn btn-tmap">Tmap</a>
+                                </div>
+                            </div>`
+                        });
+
+                        naver.maps.Event.addListener(marker, "click", () => {
+                            if (activeInfoWindow === info) { info.close(); activeInfoWindow = null; }
+                            else { if (activeInfoWindow) activeInfoWindow.close(); info.open(naverMap, marker); activeInfoWindow = info; }
+                        });
+
+                        marker.set('code', code.toLowerCase()); marker.set('name', name.toLowerCase()); marker.set('addr', addr.toLowerCase()); 
+                        marker.set('type', type); marker.set('finished', isFinished);
+                        allMarkers.push(marker);
+                    }
+                });
+
+                document.getElementById('total-prog').innerText = stats.total > 0 ? Math.round((stats.complete / stats.total) * 100) + "%" : "0%";
+                document.getElementById('total-count').innerText = `${stats.complete} / ${stats.total}`;
+
+                initClustering();
+                bindEvents();
+                updateFilters();
+            } catch (e) { console.error(e); }
+        }
+
+        function bindEvents() {
+            const input = document.getElementById('address-input'), clear = document.getElementById('clear-btn'), list = document.getElementById('autocomplete-list');
+            document.querySelectorAll('#controls input').forEach(el => el.addEventListener('change', updateFilters));
+            
+            input.addEventListener('input', () => {
+                const q = input.value.trim().toLowerCase(); 
+                clear.style.display = q ? 'block' : 'none';
+                if (q.length < 1) { list.style.display = 'none'; isSearchMode = false; updateFilters(); return; }
+                naver.maps.Service.geocode({ query: q }, (status, response) => {
+                    let html = "";
+                    if (status === naver.maps.Service.Status.OK && response.v2.addresses.length) {
+                        response.v2.addresses.slice(0, 2).forEach(addr => {
+                            const officialName = addr.jibunAddress || addr.roadAddress;
+                            const coreValue = getCoreUnit(officialName);
+                            html += `<div class="suggestion-item" onclick="handleSearch('${coreValue}')"><span class="type-badge badge-geo">행정구역</span> <span class="geo-text">${officialName}</span></div>`;
+                        });
+                    }
+                    const matchedStores = allMarkers.filter(m => m.get('name').includes(q) || m.get('code').includes(q)).slice(0, 5);
+                    matchedStores.forEach(m => {
+                        html += `<div class="suggestion-item" onclick="handleSearch('${m.get('name')}', '${m.get('code')}')"><span class="type-badge badge-store">점포</span> [${m.get('code').toUpperCase()}] ${m.get('name')}</div>`;
+                    });
+                    list.innerHTML = html; list.style.display = html ? 'block' : 'none';
+                });
+            });
+
+            clear.addEventListener('click', () => { 
+                input.value = ''; clear.style.display = 'none'; list.style.display = 'none';
+                isSearchMode = false; lastSearchResults = [];
+                if (currentPolygon) { currentPolygon.setMap(null); currentPolygon = null; }
+                document.getElementById('area-dash-box').style.display = 'none';
+                document.querySelectorAll('.marker-label').forEach(el => el.classList.remove('force-show'));
+                updateFilters(); 
+            });
+
+            document.getElementById('search-btn').addEventListener('click', () => handleSearch(input.value));
+            input.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleSearch(input.value); });
+        }
+
+        function handleSearch(query, storeCode = null) {
+            document.getElementById('autocomplete-list').style.display = 'none';
+            const coreKeyword = getCoreUnit(query);
+            document.getElementById('address-input').value = coreKeyword;
+            const q = coreKeyword.toLowerCase();
+
+            if (currentPolygon) { currentPolygon.setMap(null); currentPolygon = null; }
+
+            isSearchMode = true;
+            lastSearchResults = allMarkers.filter(m => 
+                m.get('addr').includes(q) || m.get('name').includes(q) || m.get('code').includes(q)
+            );
+
+            if (lastSearchResults.length > 0) {
+                const areaComplete = lastSearchResults.filter(m => m.get('finished')).length;
+                const areaTotal = lastSearchResults.length;
+                const areaPerc = Math.round((areaComplete / areaTotal) * 100);
+                document.getElementById('area-dash-box').style.display = 'block';
+                document.getElementById('area-title').innerText = `📍 ${coreKeyword} 진행률`;
+                document.getElementById('area-prog').innerText = areaPerc + "%";
+                document.getElementById('area-count').innerText = `${areaComplete} / ${areaTotal}`;
+            }
+
+            const targetStore = allMarkers.find(m => (storeCode && m.get('code') === storeCode.toLowerCase()) || m.get('name') === q);
+            if (targetStore && storeCode) {
+                naverMap.setCenter(targetStore.getPosition()); naverMap.setZoom(16);
+            } else {
+                naver.maps.Service.geocode({ query: query }, (status, response) => {
+                    if (status === naver.maps.Service.Status.OK && response.v2.addresses.length) {
+                        const addrRes = response.v2.addresses[0];
+                        fetchVWorldBoundary(addrRes.jibunAddress || query);
+                        naverMap.setCenter(new naver.maps.LatLng(addrRes.y, addrRes.x)); naverMap.setZoom(14);
+                    } else if (lastSearchResults.length > 0) {
+                        naverMap.setCenter(lastSearchResults[0].getPosition());
+                    }
+                });
+            }
+            updateFilters();
+        }
+
+        function fetchVWorldBoundary(fullAddr) {
+            const parts = fullAddr.split(' ');
+            const targets = parts.filter(p => (p.endsWith('구') || p.endsWith('동') || p.endsWith('시')) && p.length > 1);
+            if (!targets.length) return;
+            const targetName = targets[targets.length - 1]; 
+            const layer = targetName.endsWith('동') ? 'LT_C_ADEMD' : 'LT_C_ADSIG';
+            const attr = targetName.endsWith('동') ? 'emd_kor_nm' : 'sig_kor_nm';
+            const url = `https://api.vworld.kr/req/data?service=data&request=GetFeature&data=${layer}&key=${CONFIG.VWORLD_KEY}&attrFilter=${attr}:like:${targetName}&geometry=true&size=1`;
+            fetch(url).then(res => res.json()).then(data => {
+                if (data.response?.status === "OK" && data.response.result) drawPolygon(data.response.result.featureCollection.features[0]);
+            });
+        }
+
+        function drawPolygon(feature) {
+            if (currentPolygon) currentPolygon.setMap(null);
+            const paths = [];
+            const coords = feature.geometry.coordinates;
+            if (feature.geometry.type === "Polygon") { paths.push(coords[0].map(c => new naver.maps.LatLng(c[1], c[0]))); }
+            else { coords.forEach(p => paths.push(p[0].map(c => new naver.maps.LatLng(c[1], c[0])))); }
+            currentPolygon = new naver.maps.Polygon({
+                map: naverMap, paths: paths, fillColor: '#03C75A', fillOpacity: 0.15, strokeColor: '#03C75A', strokeOpacity: 0.8, strokeWeight: 2
+            });
+        }
+
+        function initClustering() {
+            markerClustering = new MarkerClustering({
+                minClusterSize: 2, maxZoom: 14, map: naverMap, markers: [], gridSize: 180,
+                icons: [{ content: '<div style="cursor:pointer;width:45px;height:45px;line-height:45px;font-size:13px;color:white;text-align:center;font-weight:bold;background:rgba(0,123,255,0.85);border:2px solid #fff;border-radius:50%;"></div>', size: N.Size(45, 45), anchor: N.Point(22, 22) }],
+                stylingFunction: (m, c) => { m.getElement().querySelector('div').innerText = c; }
+            });
+        }
+
+        function updateFilters() {
+            const showComp = document.getElementById('showCompleted').checked, showExcl = document.getElementById('showExcluded').checked, showLabels = document.getElementById('showLabels').checked;
+            const center = naverMap.getCenter(), zoom = naverMap.getZoom();
+            
+            let filtered = (isSearchMode ? lastSearchResults : allMarkers).filter(m => {
+                const t = m.get('type');
+                let isVisible = (t === "normal") || (t === "completed" && showComp) || (t === "excluded" && showExcl);
+                if (!isVisible) return false;
+                if (!isSearchMode) return naverMap.getProjection().getDistance(center, m.getPosition()) <= CONFIG.LIMIT_DISTANCE;
+                return true;
+            });
+
+            markerClustering.setMarkers(filtered);
+            if (markerClustering.update) markerClustering.update();
+
+            const labelOpacity = (showLabels && zoom >= 15) ? '1' : '0';
+            document.querySelectorAll('.marker-label').forEach(el => {
+                if (!el.classList.contains('force-show')) el.style.opacity = labelOpacity;
+                else el.style.opacity = showLabels ? '1' : '0';
+            });
+            document.getElementById('count-bar').innerText = isSearchMode ? `검색결과 ${filtered.length}개 표시` : `중심 10km 내 ${filtered.length}개 표시`;
+        }
+
+        window.addEventListener('load', initMap);
+    </script>
+</body>
+</html>
