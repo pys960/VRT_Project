@@ -171,6 +171,11 @@
             text-align: center; 
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }   
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(3); opacity: 0; }
+        }
     </style>
 </head>
 <body>
@@ -235,7 +240,7 @@
         };
 
         let naverMap, allMarkers = [], markerClustering, activeInfoWindow = null;
-        let isSearchMode = false, masterData = [];
+        let isSearchMode = false, masterData = [], myLocationMarker = null;
 
         function getCoreUnit(fullText) {
             const words = fullText.split(' ');
@@ -391,7 +396,36 @@
             document.getElementById('clear-btn').onclick = () => { input.value = ''; isSearchMode = false; list.style.display = 'none'; updateFilters(); };
             document.getElementById('search-btn').onclick = () => { isSearchMode = true; updateFilters(); };
             document.querySelectorAll('#controls input').forEach(el => el.onchange = updateFilters);
-            document.getElementById('mylocation-btn').onclick = () => { navigator.geolocation.getCurrentPosition(pos => { const p = new naver.maps.LatLng(pos.coords.latitude, pos.coords.longitude); naverMap.setCenter(p); naverMap.setZoom(16); }); };
+            document.getElementById('mylocation-btn').onclick = () => {
+                navigator.geolocation.getCurrentPosition(pos => {
+                    const p = new naver.maps.LatLng(pos.coords.latitude, pos.coords.longitude);
+                    naverMap.setCenter(p);
+                    naverMap.setZoom(16);
+
+                    // --- 내 위치 파란색 점 표시 로직 시작 ---
+                    if (!myLocationMarker) {
+                        // 처음 클릭 시 마커 생성
+                        myLocationMarker = new naver.maps.Marker({
+                            position: p,
+                            map: naverMap,
+                            icon: {
+                                content: `
+                                    <div style="position:relative; width:20px; height:20px;">
+                                        <div style="position:absolute; width:100%; height:100%; background:rgba(0,122,255,0.3); border-radius:50%; animation: pulse 2s infinite;"></div>
+                                        <div style="position:absolute; top:5px; left:5px; width:10px; height:10px; background:#007AFF; border:2px solid white; border-radius:50%; box-shadow:0 0 5px rgba(0,0,0,0.3);"></div>
+                                    </div>`,
+                                anchor: new naver.maps.Point(10, 10)
+                            },
+                            zIndex: 999 // 다른 마커들보다 항상 위에 보이도록 설정
+                        });
+                    } else {
+                        // 이미 있으면 위치만 이동
+                        myLocationMarker.setPosition(p);
+                    }
+                }, (err) => {
+                    alert("위치 정보를 가져올 수 없습니다. 권한을 확인해주세요.");
+                });
+            };
         }
 
         window.handleSelectStore = (name) => { document.getElementById('address-input').value = name; document.getElementById('autocomplete-list').style.display = 'none'; isSearchMode = true; updateFilters(); const target = allMarkers.find(m => m.get('name') === name.toLowerCase()); if (target) { naverMap.setCenter(target.getPosition()); naverMap.setZoom(17); } };
