@@ -325,21 +325,34 @@
                             }
                         });
 
+                        const naverAppUrl = `nmap://route/car?dlat=${lat}&dlng=${lng}&dname=${encodeURIComponent(name)}&appname=com.example.myapp`;
+                        const naverWebUrl = `https://map.naver.com/v5/directions//${encodeURIComponent(name)},${lat},${lng},,,/mode/car`;
+
                         const info = new naver.maps.InfoWindow({
-                            content: `<div class="info-box">
-                                <div class="info-header"><div class="info-title" style="color:${res.client.color}"><span style="font-size:11px; opacity:0.6;">${code}</span> ${name}</div></div>
-                                <div class="info-item"><span class="info-label"><span>주</span><span>소</span></span>: <span class="info-data">${addr}</span></div>
-                                <div class="info-item"><span class="info-label"><span>특</span><span>이</span><span>사</span><span>항</span></span>: <span class="info-data note-highlight">${note}</span></div>
-                                <div class="info-item"><span class="info-label"><span>점</span><span>검</span><span>여</span><span>부</span></span>: <span class="info-data">${status}</span></div>
-                                <div class="info-item"><span class="info-label"><span>점</span><span>검</span><span>일</span></span>: <span class="info-data">${date}</span></div>
-                                ${res.client.id === 'k7' ? `<div class="info-item"><span class="info-label"><span>자</span><span>산</span><span>라</span><span>벨</span></span>: <span class="info-data">${asset}</span></div>` : ''}
-                                <div class="btn-group">
-                                    <a href="https://map.naver.com/v5/directions//${encodeURIComponent(name)},${lat},${lng},,,/mode/car" target="_blank" class="nav-btn btn-naver">네이버</a>
-                                    <a href="https://map.kakao.com/link/to/${encodeURIComponent(name)},${lat},${lng}" target="_blank" class="nav-btn btn-kakao">카카오</a>
-                                    <a href="tmap://route?rName=${encodeURIComponent(name)}&rLat=${lat}&rLon=${lng}" class="nav-btn btn-tmap">Tmap</a>
-                                </div>
-                            </div>`,
-                            borderWidth: 0, backgroundColor: "transparent", disableAnchor: true
+                            content: `
+                                <div class="info-box">
+                                    <div class="info-header">
+                                        <div class="info-title" style="color:${res.client.color}">
+                                            <span style="font-size:11px; opacity:0.6;">${code}</span> ${name}
+                                        </div>
+                                    </div>
+                                    <div class="info-item"><span class="info-label"><span>주</span><span>소</span></span>: <span class="info-data">${addr}</span></div>
+                                    <div class="info-item"><span class="info-label"><span>특</span><span>이</span><span>사</span><span>항</span></span>: <span class="info-data note-highlight">${note}</span></div>
+                                    <div class="info-item"><span class="info-label"><span>점</span><span>검</span><span>여</span><span>부</span></span>: <span class="info-data">${status}</span></div>
+                                    <div class="info-item"><span class="info-label"><span>점</span><span>검</span><span>일</span></span>: <span class="info-data">${date}</span></div>
+                                    ${res.client.id === 'k7' ? `<div class="info-item"><span class="info-label"><span>자</span><span>산</span><span>라</span><span>벨</span></span>: <span class="info-data">${asset}</span></div>` : ''}
+                                    
+                                    <div class="btn-group" style="display: flex; gap: 4px; margin-top: 15px;">
+                                        <a href="${naverAppUrl}" onclick="window.location.href='${naverWebUrl}'; return false;" class="nav-btn btn-naver" style="flex: 1; padding: 10px 0; border-radius: 6px; font-size: 11px; font-weight: bold; text-align: center; text-decoration: none; color: #fff; background: #03C75A;">네이버</a>
+                                        
+                                        <a href="https://map.kakao.com/link/to/${encodeURIComponent(name)},${lat},${lng}" target="_blank" class="nav-btn btn-kakao" style="flex: 1; padding: 10px 0; border-radius: 6px; font-size: 11px; font-weight: bold; text-align: center; text-decoration: none; color: #3C1E1E; background: #FEE500;">카카오</a>
+                                        
+                                        <a href="tmap://route?rName=${encodeURIComponent(name)}&rLat=${lat}&rLon=${lng}" class="nav-btn btn-tmap" style="flex: 1; padding: 10px 0; border-radius: 6px; font-size: 11px; font-weight: bold; text-align: center; text-decoration: none; color: #fff; background: #ff6b00;">Tmap</a>
+                                    </div>
+                                </div>`,
+                            borderWidth: 0, 
+                            backgroundColor: "transparent", 
+                            disableAnchor: true
                         });
 
                         naver.maps.Event.addListener(marker, "click", () => {
