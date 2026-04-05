@@ -10,18 +10,26 @@
     
     <style>
         body, html { 
-            margin: 0; padding: 0; height: 100%; overflow: hidden; font-family: 'Pretendard', sans-serif; 
+            margin: 0; padding: 0; 
             
-            /* 모바일 브라우저 튕김(바운스) 및 당겨서 새로고침 방지 */
+            /* 화면 크기를 기기 뷰포트에 꽉 차게 명시 */
+            width: 100%; height: 100%; 
+            overflow: hidden; 
+            font-family: 'Pretendard', sans-serif; 
+            
+            /* [핵심 추가] 카카오톡 등 인앱 브라우저에서 화면 전체가 밀리는 현상 강제 방지 */
+            position: fixed; 
+            top: 0; left: 0; 
+            right: 0; bottom: 0;
+            
+            /* 기존 튕김 및 텍스트 선택 방지 속성 유지 */
             overscroll-behavior: none; 
-            
-            /* 화면 꾹 눌렀을 때 텍스트가 블록 지정되거나 팝업 메뉴가 뜨는 현상 방지 */
             -webkit-user-select: none; 
             user-select: none; 
             -webkit-touch-callout: none; 
         }
 
-        /* 단, 검색창(input)에서는 텍스트를 입력하고 지워야 하므로 예외 처리 */
+        /* 검색창 텍스트 입력 허용 유지 */
         input {
             -webkit-user-select: auto;
             user-select: auto;
