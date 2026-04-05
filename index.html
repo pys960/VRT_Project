@@ -278,43 +278,32 @@
             
             results.forEach(res => {
                 res.rows.forEach(row => {
+                    if (!row || !row.c) return;
                     const gv = (idx) => (row.c[idx] && row.c[idx].v !== null) ? String(row.c[idx].v).trim() : "-";
                     
                     let code, name, addr, note, asset, status, date, lat, lng;
 
-                    // [핵심] 고객사별 열 매칭 로직 분리
+                    // 1. 고객사별 열 매칭 로직 (제공해주신 인덱스 기준)
                     if (res.client.id === 'k7') {
-                        // 세븐일레븐(K7) 구조
-                        code   = gv(0);  // A
-                        name   = gv(1);  // B
-                        addr   = gv(2);  // C
-                        note   = gv(3);  // D
-                        asset  = gv(4);  // E
-                        status = gv(6);  // G
-                        date   = formatDate(gv(7)); // H
-                        lat    = parseFloat(row.c[9]?.v);  // J
-                        lng    = parseFloat(row.c[10]?.v); // K
+                        code   = gv(0); name = gv(1); addr = gv(2); note = gv(3); asset = gv(4);
+                        status = gv(6); date = formatDate(gv(7));
+                        lat    = parseFloat(row.c[9]?.v);  // J열
+                        lng    = parseFloat(row.c[10]?.v); // K열
                     } else {
-                        // 롯데리아, 엔젤, KKD, 컨세션 공통 구조
-                        code   = gv(0);  // A
-                        name   = gv(1);  // B
-                        addr   = gv(6);  // G (주소)
-                        note   = gv(4);  // E (특이사항)
-                        asset  = "-";    // 자산라벨 없음
-                        status = gv(2);  // C (점검여부)
-                        date   = formatDate(gv(3)); // D (점검일)
-                        lat    = parseFloat(row.c[7]?.v);  // H (위도)
-                        lng    = parseFloat(row.c[8]?.v);  // I (경도)
+                        code   = gv(0); name = gv(1); 
+                        addr   = gv(6);   // G열
+                        note   = gv(4);   // E열
+                        status = gv(2);   // C열
+                        date   = formatDate(gv(3)); // D열
+                        asset  = "-";     // 자산라벨 없음
+                        lat    = parseFloat(row.c[7]?.v);  // H열
+                        lng    = parseFloat(row.c[8]?.v);  // I열
                     }
                     
-                    // 상태 판별 (공통)
-                    const isFinished = status !== "미완료" && status !== "-";
-                    const isExcluded = ['휴점','제외','폐점','리뉴얼'].some(k => status.includes(k));
-
-                    if (name !== "-") masterData.push({ clientId: res.client.id, finished: isFinished, excluded: isExcluded });
-
-                    // 유효한 마커만 생성
+                    // 2. 좌표 유효성 검사 및 마커 생성
                     if (name !== "-" && !isNaN(lat) && !isNaN(lng)) {
+                        const isFinished = status !== "미완료" && status !== "-";
+                        const isExcluded = ['휴점','제외','폐점','리뉴얼'].some(k => status.includes(k));
                         let markerColor = isExcluded ? "#888" : (isFinished ? "#1b5e20" : res.client.color);
                         
                         const marker = new naver.maps.Marker({
@@ -325,34 +314,28 @@
                             }
                         });
 
-                        const naverAppUrl = `nmap://route/car?dlat=${lat}&dlng=${lng}&dname=${encodeURIComponent(name)}&appname=com.example.myapp`;
-                        const naverWebUrl = `https://map.naver.com/v5/directions//${encodeURIComponent(name)},${lat},${lng},,,/mode/car`;
+                        // 네이버 지도 앱/웹 주소 생성 (에러 방지용)
+                        const nApp = `nmap://route/car?dlat=${lat}&dlng=${lng}&dname=${encodeURIComponent(name)}&appname=com.store.map`;
+                        const nWeb = `https://map.naver.com/v5/directions//${encodeURIComponent(name)},${lat},${lng},,,/mode/car`;
 
+                        // 3. 인포윈도우 (기존 형식 및 서식 완벽 유지)
                         const info = new naver.maps.InfoWindow({
                             content: `
                                 <div class="info-box">
-                                    <div class="info-header">
-                                        <div class="info-title" style="color:${res.client.color}">
-                                            <span style="font-size:11px; opacity:0.6;">${code}</span> ${name}
-                                        </div>
-                                    </div>
+                                    <div class="info-header"><div class="info-title" style="color:${res.client.color}"><span style="font-size:11px; opacity:0.6;">${code}</span> ${name}</div></div>
                                     <div class="info-item"><span class="info-label"><span>주</span><span>소</span></span>: <span class="info-data">${addr}</span></div>
                                     <div class="info-item"><span class="info-label"><span>특</span><span>이</span><span>사</span><span>항</span></span>: <span class="info-data note-highlight">${note}</span></div>
                                     <div class="info-item"><span class="info-label"><span>점</span><span>검</span><span>여</span><span>부</span></span>: <span class="info-data">${status}</span></div>
                                     <div class="info-item"><span class="info-label"><span>점</span><span>검</span><span>일</span></span>: <span class="info-data">${date}</span></div>
                                     ${res.client.id === 'k7' ? `<div class="info-item"><span class="info-label"><span>자</span><span>산</span><span>라</span><span>벨</span></span>: <span class="info-data">${asset}</span></div>` : ''}
                                     
-                                    <div class="btn-group" style="display: flex; gap: 4px; margin-top: 15px;">
-                                        <a href="${naverAppUrl}" onclick="window.location.href='${naverWebUrl}'; return false;" class="nav-btn btn-naver" style="flex: 1; padding: 10px 0; border-radius: 6px; font-size: 11px; font-weight: bold; text-align: center; text-decoration: none; color: #fff; background: #03C75A;">네이버</a>
-                                        
-                                        <a href="https://map.kakao.com/link/to/${encodeURIComponent(name)},${lat},${lng}" target="_blank" class="nav-btn btn-kakao" style="flex: 1; padding: 10px 0; border-radius: 6px; font-size: 11px; font-weight: bold; text-align: center; text-decoration: none; color: #3C1E1E; background: #FEE500;">카카오</a>
-                                        
-                                        <a href="tmap://route?rName=${encodeURIComponent(name)}&rLat=${lat}&rLon=${lng}" class="nav-btn btn-tmap" style="flex: 1; padding: 10px 0; border-radius: 6px; font-size: 11px; font-weight: bold; text-align: center; text-decoration: none; color: #fff; background: #ff6b00;">Tmap</a>
+                                    <div class="btn-group">
+                                        <a href="${nApp}" onclick="window.location.href='${nWeb}'; return false;" class="nav-btn btn-naver">네이버</a>
+                                        <a href="https://map.kakao.com/link/to/${encodeURIComponent(name)},${lat},${lng}" target="_blank" class="nav-btn btn-kakao">카카오</a>
+                                        <a href="tmap://route?rName=${encodeURIComponent(name)}&rLat=${lat}&rLon=${lng}" class="nav-btn btn-tmap">Tmap</a>
                                     </div>
                                 </div>`,
-                            borderWidth: 0, 
-                            backgroundColor: "transparent", 
-                            disableAnchor: true
+                            borderWidth: 0, backgroundColor: "transparent", disableAnchor: true
                         });
 
                         naver.maps.Event.addListener(marker, "click", () => {
@@ -367,17 +350,13 @@
                         marker.set('finished', isFinished);
                         marker.set('excluded', isExcluded);
                         allMarkers.push(marker);
+                        masterData.push({ clientId: res.client.id, finished: isFinished, excluded: isExcluded });
                     }
                 });
             });
 
-            // [기능 유지] 기존 클러스터링 디자인 복구
             markerClustering = new MarkerClustering({ 
-                minClusterSize: 2, 
-                maxZoom: 14, 
-                map: naverMap, 
-                markers: [], 
-                gridSize: 180, 
+                minClusterSize: 2, maxZoom: 14, map: naverMap, markers: [], gridSize: 180, 
                 icons: [{ content: '<div style="cursor:pointer;width:50px;height:50px;line-height:50px;font-size:15px;color:white;text-align:center;font-weight:bold;background:rgba(65, 105, 225, 0.85);border:2px solid #fff;border-radius:50%;"></div>', size: N.Size(40, 40), anchor: N.Point(20, 20) }], 
                 stylingFunction: (m, c) => { m.getElement().querySelector('div').innerText = c; } 
             });
@@ -409,35 +388,23 @@
             document.getElementById('clear-btn').onclick = () => { input.value = ''; isSearchMode = false; list.style.display = 'none'; updateFilters(); };
             document.getElementById('search-btn').onclick = () => { isSearchMode = true; updateFilters(); };
             document.querySelectorAll('#controls input').forEach(el => el.onchange = updateFilters);
+            
+            // 내 위치 버튼 로직 (파란색 점 마커 추가)
             document.getElementById('mylocation-btn').onclick = () => {
                 navigator.geolocation.getCurrentPosition(pos => {
                     const p = new naver.maps.LatLng(pos.coords.latitude, pos.coords.longitude);
                     naverMap.setCenter(p);
                     naverMap.setZoom(16);
-
-                    // --- 내 위치 파란색 점 표시 로직 시작 ---
                     if (!myLocationMarker) {
-                        // 처음 클릭 시 마커 생성
                         myLocationMarker = new naver.maps.Marker({
-                            position: p,
-                            map: naverMap,
+                            position: p, map: naverMap,
                             icon: {
-                                content: `
-                                    <div style="position:relative; width:20px; height:20px;">
-                                        <div style="position:absolute; width:100%; height:100%; background:rgba(0,122,255,0.3); border-radius:50%; animation: pulse 2s infinite;"></div>
-                                        <div style="position:absolute; top:5px; left:5px; width:10px; height:10px; background:#007AFF; border:2px solid white; border-radius:50%; box-shadow:0 0 5px rgba(0,0,0,0.3);"></div>
-                                    </div>`,
+                                content: `<div style="position:relative; width:20px; height:20px;"><div style="position:absolute; width:100%; height:100%; background:rgba(0,122,255,0.3); border-radius:50%; animation: pulse 2s infinite;"></div><div style="position:absolute; top:5px; left:5px; width:10px; height:10px; background:#007AFF; border:2px solid white; border-radius:50%; box-shadow:0 0 5px rgba(0,0,0,0.3);"></div></div>`,
                                 anchor: new naver.maps.Point(10, 10)
-                            },
-                            zIndex: 999 // 다른 마커들보다 항상 위에 보이도록 설정
+                            }, zIndex: 999
                         });
-                    } else {
-                        // 이미 있으면 위치만 이동
-                        myLocationMarker.setPosition(p);
-                    }
-                }, (err) => {
-                    alert("위치 정보를 가져올 수 없습니다. 권한을 확인해주세요.");
-                });
+                    } else { myLocationMarker.setPosition(p); }
+                }, (err) => { alert("위치 정보를 가져올 수 없습니다."); });
             };
         }
 
