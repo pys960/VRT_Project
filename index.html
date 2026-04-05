@@ -276,14 +276,14 @@
 
             const results = await Promise.all(fetchPromises);
             
-            results.forEach(res => {
+        results.forEach(res => {
                 res.rows.forEach(row => {
                     if (!row || !row.c) return;
                     const gv = (idx) => (row.c[idx] && row.c[idx].v !== null) ? String(row.c[idx].v).trim() : "-";
                     
                     let code, name, addr, note, asset, status, date, lat, lng;
 
-                    // 1. 고객사별 열 매칭 로직 (제공해주신 인덱스 기준)
+                    // 1. 고객사별 열 매칭 로직 (데이터가 섞이지 않도록 분리)
                     if (res.client.id === 'k7') {
                         code   = gv(0); name = gv(1); addr = gv(2); note = gv(3); asset = gv(4);
                         status = gv(6); date = formatDate(gv(7));
@@ -291,16 +291,16 @@
                         lng    = parseFloat(row.c[10]?.v); // K열
                     } else {
                         code   = gv(0); name = gv(1); 
-                        addr   = gv(6);   // G열
-                        note   = gv(4);   // E열
-                        status = gv(2);   // C열
-                        date   = formatDate(gv(3)); // D열
+                        addr   = gv(6);   // G열: 주소
+                        note   = gv(4);   // E열: 특이사항
+                        status = gv(2);   // C열: 점검여부
+                        date   = formatDate(gv(3)); // D열: 점검일
                         asset  = "-";     // 자산라벨 없음
-                        lat    = parseFloat(row.c[7]?.v);  // H열
-                        lng    = parseFloat(row.c[8]?.v);  // I열
+                        lat    = parseFloat(row.c[7]?.v);  // H열: 위도
+                        lng    = parseFloat(row.c[8]?.v);  // I열: 경도
                     }
                     
-                    // 2. 좌표 유효성 검사 및 마커 생성
+                    // 2. 좌표 유효성 검사 (무한 로딩 방지 핵심)
                     if (name !== "-" && !isNaN(lat) && !isNaN(lng)) {
                         const isFinished = status !== "미완료" && status !== "-";
                         const isExcluded = ['휴점','제외','폐점','리뉴얼'].some(k => status.includes(k));
@@ -314,10 +314,11 @@
                             }
                         });
 
-                        // 변수 선언부를 아래 1줄로 교체
-                        const nUrl = `https://map.naver.com/v5/directions//${encodeURIComponent(name)},${lat},${lng},,,/mode/car`;
-                        
-                        // 3. 인포윈도우 (기존 형식 및 서식 완벽 유지)
+                        // 네이버 길찾기용 안전한 URL 생성 (Internal Server Error 방지)
+                        const encName = encodeURIComponent(name);
+                        const nUrl = `https://map.naver.com/v5/directions//${encName},${lat},${lng},,,/mode/car`;
+
+                        // 3. 인포윈도우 (기존 서식 및 버튼 수정)
                         const info = new naver.maps.InfoWindow({
                             content: `
                                 <div class="info-box">
@@ -330,8 +331,8 @@
                                     
                                     <div class="btn-group">
                                         <a href="${nUrl}" class="nav-btn btn-naver">네이버</a>
-                                        <a href="https://map.kakao.com/link/to/${encodeURIComponent(name)},${lat},${lng}" target="_blank" class="nav-btn btn-kakao">카카오</a>
-                                        <a href="tmap://route?rName=${encodeURIComponent(name)}&rLat=${lat}&rLon=${lng}" class="nav-btn btn-tmap">Tmap</a>
+                                        <a href="https://map.kakao.com/link/to/${encName},${lat},${lng}" target="_blank" class="nav-btn btn-kakao">카카오</a>
+                                        <a href="tmap://route?rName=${encName}&rLat=${lat}&rLon=${lng}" class="nav-btn btn-tmap">Tmap</a>
                                     </div>
                                 </div>`,
                             borderWidth: 0, backgroundColor: "transparent", disableAnchor: true
@@ -342,18 +343,22 @@
                             else { if (activeInfoWindow) activeInfoWindow.close(); info.open(naverMap, marker); activeInfoWindow = info; }
                         });
 
+                        // 4. 검색 기능을 위한 데이터 심기 (연관 키워드 복구)
                         marker.set('clientId', res.client.id);
                         marker.set('name', name.toLowerCase());
                         marker.set('code', code.toLowerCase());
                         marker.set('addr', addr.toLowerCase());
                         marker.set('finished', isFinished);
                         marker.set('excluded', isExcluded);
+                        
                         allMarkers.push(marker);
+                        // 통계용 데이터 추가 (여기서 한 번만 수행)
                         masterData.push({ clientId: res.client.id, finished: isFinished, excluded: isExcluded });
                     }
                 });
             });
 
+            // 클러스터링 초기화
             markerClustering = new MarkerClustering({ 
                 minClusterSize: 2, maxZoom: 14, map: naverMap, markers: [], gridSize: 180, 
                 icons: [{ content: '<div style="cursor:pointer;width:50px;height:50px;line-height:50px;font-size:15px;color:white;text-align:center;font-weight:bold;background:rgba(65, 105, 225, 0.85);border:2px solid #fff;border-radius:50%;"></div>', size: N.Size(40, 40), anchor: N.Point(20, 20) }], 
@@ -366,10 +371,12 @@
 
         function bindEvents() {
             const input = document.getElementById('address-input'), list = document.getElementById('autocomplete-list');
+            
             input.oninput = () => {
                 const q = input.value.trim().toLowerCase();
                 document.getElementById('clear-btn').style.display = q ? 'block' : 'none';
                 if (q.length < 1) { list.style.display = 'none'; return; }
+                
                 naver.maps.Service.geocode({ query: q }, (status, response) => {
                     let html = "";
                     if (status === naver.maps.Service.Status.OK && response.v2.addresses.length) {
@@ -379,20 +386,25 @@
                             html += `<div class="suggestion-item" onclick="handleSelectGeo('${core}')"><span class="type-badge badge-geo">지역</span> ${name}</div>`;
                         });
                     }
+                    
+                    // [검색 로직] 이름, 코드, 주소 통합 검색
                     const matched = allMarkers.filter(m => 
                         (m.get('name') && m.get('name').includes(q)) || 
-                        (m.get('code') && m.get('code').includes(q)) ||
+                        (m.get('code') && m.get('code').includes(q)) || 
                         (m.get('addr') && m.get('addr').includes(q))
                     ).slice(0, 5);
-                    matched.forEach(m => { html += `<div class="suggestion-item" onclick="handleSelectStore('${m.get('name')}')"><span class="type-badge badge-store">점포</span> ${m.get('name')}</div>`; });
+                    
+                    matched.forEach(m => { 
+                        html += `<div class="suggestion-item" onclick="handleSelectStore('${m.get('name')}')"><span class="type-badge badge-store">점포</span> ${m.get('name')}</div>`; 
+                    });
                     list.innerHTML = html; list.style.display = html ? 'block' : 'none';
                 });
             };
+
             document.getElementById('clear-btn').onclick = () => { input.value = ''; isSearchMode = false; list.style.display = 'none'; updateFilters(); };
-            document.getElementById('search-btn').onclick = () => { isSearchMode = true; updateFilters(); };
+            document.getElementById('search-btn').onclick = () => { isSearchMode = true; updateFilters(); list.style.display = 'none'; };
             document.querySelectorAll('#controls input').forEach(el => el.onchange = updateFilters);
             
-            // 내 위치 버튼 로직 (파란색 점 마커 추가)
             document.getElementById('mylocation-btn').onclick = () => {
                 navigator.geolocation.getCurrentPosition(pos => {
                     const p = new naver.maps.LatLng(pos.coords.latitude, pos.coords.longitude);
@@ -404,7 +416,7 @@
                             icon: {
                                 content: `<div style="position:relative; width:20px; height:20px;"><div style="position:absolute; width:100%; height:100%; background:rgba(0,122,255,0.3); border-radius:50%; animation: pulse 2s infinite;"></div><div style="position:absolute; top:5px; left:5px; width:10px; height:10px; background:#007AFF; border:2px solid white; border-radius:50%; box-shadow:0 0 5px rgba(0,0,0,0.3);"></div></div>`,
                                 anchor: new naver.maps.Point(10, 10)
-                            }, zIndex: 999
+                            }, zIndex: 1000
                         });
                     } else { myLocationMarker.setPosition(p); }
                 }, (err) => { alert("위치 정보를 가져올 수 없습니다."); });
