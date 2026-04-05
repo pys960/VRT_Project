@@ -283,24 +283,24 @@
                     
                     let code, name, addr, note, asset, status, date, lat, lng;
 
-                    // 1. 고객사별 열 매칭 (기존 서식 유지의 핵심)
+                    // 1. 고객사별 열 매칭 로직 (제공해주신 인덱스 기준)
                     if (res.client.id === 'k7') {
                         code   = gv(0); name = gv(1); addr = gv(2); note = gv(3); asset = gv(4);
                         status = gv(6); date = formatDate(gv(7));
-                        lat    = parseFloat(row.c[9]?.v);
-                        lng    = parseFloat(row.c[10]?.v);
+                        lat    = parseFloat(row.c[9]?.v);  // J열
+                        lng    = parseFloat(row.c[10]?.v); // K열
                     } else {
                         code   = gv(0); name = gv(1); 
                         addr   = gv(6);   // G열
                         note   = gv(4);   // E열
                         status = gv(2);   // C열
                         date   = formatDate(gv(3)); // D열
-                        asset  = "-";
-                        lat    = parseFloat(row.c[7]?.v);
-                        lng    = parseFloat(row.c[8]?.v);
+                        asset  = "-";     // 자산라벨 없음
+                        lat    = parseFloat(row.c[7]?.v);  // H열
+                        lng    = parseFloat(row.c[8]?.v);  // I열
                     }
                     
-                    // 2. 마커 및 인포윈도우 생성 (내용 누락 방지)
+                    // 2. 좌표 유효성 검사 및 마커 생성
                     if (name !== "-" && !isNaN(lat) && !isNaN(lng)) {
                         const isFinished = status !== "미완료" && status !== "-";
                         const isExcluded = ['휴점','제외','폐점','리뉴얼'].some(k => status.includes(k));
@@ -314,29 +314,24 @@
                             }
                         });
 
-                        // 네이버 앱 에러 방지를 위한 인코딩 및 URL 생성
-                        const encName = encodeURIComponent(name);
-                        const nApp = `nmap://route/car?dlat=${lat}&dlng=${lng}&dname=${encName}&appname=com.store.map`;
-                        const nWeb = `https://map.naver.com/v5/directions//${encName},${lat},${lng},,,/mode/car`;
-
+                        // 변수 선언부를 아래 1줄로 교체
+                        const nUrl = `https://map.naver.com/v5/directions//${encodeURIComponent(name)},${lat},${lng},,,/mode/car`;
+                        
+                        // 3. 인포윈도우 (기존 형식 및 서식 완벽 유지)
                         const info = new naver.maps.InfoWindow({
                             content: `
                                 <div class="info-box">
-                                    <div class="info-header">
-                                        <div class="info-title" style="color:${res.client.color}">
-                                            <span style="font-size:11px; opacity:0.6;">${code}</span> ${name}
-                                        </div>
-                                    </div>
+                                    <div class="info-header"><div class="info-title" style="color:${res.client.color}"><span style="font-size:11px; opacity:0.6;">${code}</span> ${name}</div></div>
                                     <div class="info-item"><span class="info-label"><span>주</span><span>소</span></span>: <span class="info-data">${addr}</span></div>
                                     <div class="info-item"><span class="info-label"><span>특</span><span>이</span><span>사</span><span>항</span></span>: <span class="info-data note-highlight">${note}</span></div>
                                     <div class="info-item"><span class="info-label"><span>점</span><span>검</span><span>여</span><span>부</span></span>: <span class="info-data">${status}</span></div>
                                     <div class="info-item"><span class="info-label"><span>점</span><span>검</span><span>일</span></span>: <span class="info-data">${date}</span></div>
                                     ${res.client.id === 'k7' ? `<div class="info-item"><span class="info-label"><span>자</span><span>산</span><span>라</span><span>벨</span></span>: <span class="info-data">${asset}</span></div>` : ''}
                                     
-                                    <div class="btn-group" style="display: flex; gap: 4px; margin-top: 15px;">
-                                        <a href="${nApp}" onclick="var s=new Date().getTime(); setTimeout(function(){if(new Date().getTime()-s<1500)window.location.href='${nWeb}';},500); return false;" class="nav-btn btn-naver" style="flex:1; padding:10px 0; border-radius:6px; font-size:11px; font-weight:bold; text-align:center; text-decoration:none; color:#fff; background:#03C75A;">네이버</a>
-                                        <a href="https://map.kakao.com/link/to/${encName},${lat},${lng}" target="_blank" class="nav-btn btn-kakao" style="flex:1; padding:10px 0; border-radius:6px; font-size:11px; font-weight:bold; text-align:center; text-decoration:none; color:#3C1E1E; background:#FEE500;">카카오</a>
-                                        <a href="tmap://route?rName=${encName}&rLat=${lat}&rLon=${lng}" class="nav-btn btn-tmap" style="flex:1; padding:10px 0; border-radius:6px; font-size:11px; font-weight:bold; text-align:center; text-decoration:none; color:#fff; background:#ff6b00;">Tmap</a>
+                                    <div class="btn-group">
+                                        <a href="${nUrl}" class="nav-btn btn-naver">네이버</a>
+                                        <a href="https://map.kakao.com/link/to/${encodeURIComponent(name)},${lat},${lng}" target="_blank" class="nav-btn btn-kakao">카카오</a>
+                                        <a href="tmap://route?rName=${encodeURIComponent(name)}&rLat=${lat}&rLon=${lng}" class="nav-btn btn-tmap">Tmap</a>
                                     </div>
                                 </div>`,
                             borderWidth: 0, backgroundColor: "transparent", disableAnchor: true
@@ -349,6 +344,8 @@
 
                         marker.set('clientId', res.client.id);
                         marker.set('name', name.toLowerCase());
+                        marker.set('code', code.toLowerCase());
+                        marker.set('addr', addr.toLowerCase());
                         marker.set('finished', isFinished);
                         marker.set('excluded', isExcluded);
                         allMarkers.push(marker);
@@ -382,7 +379,11 @@
                             html += `<div class="suggestion-item" onclick="handleSelectGeo('${core}')"><span class="type-badge badge-geo">지역</span> ${name}</div>`;
                         });
                     }
-                    const matched = allMarkers.filter(m => m.get('name').includes(q) || m.get('code').includes(q)).slice(0, 5);
+                    const matched = allMarkers.filter(m => 
+                        (m.get('name') && m.get('name').includes(q)) || 
+                        (m.get('code') && m.get('code').includes(q)) ||
+                        (m.get('addr') && m.get('addr').includes(q))
+                    ).slice(0, 5);
                     matched.forEach(m => { html += `<div class="suggestion-item" onclick="handleSelectStore('${m.get('name')}')"><span class="type-badge badge-store">점포</span> ${m.get('name')}</div>`; });
                     list.innerHTML = html; list.style.display = html ? 'block' : 'none';
                 });
