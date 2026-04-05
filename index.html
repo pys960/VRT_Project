@@ -314,12 +314,26 @@
                             }
                         });
 
+                        // [추가된 로직] 고객사별 길찾기용 목적지 이름(navName) 조합
+                        let navName = name; // 기본값은 점포명 그대로 설정
+
+                        if (res.client.id === 'k7') {
+                            navName = '세븐일레븐 ' + name;
+                        } else if (res.client.id === 'ria') {
+                            navName = '롯데리아 ' + name;
+                        } else if (res.client.id === 'angel') {
+                            navName = '엔젤리너스 ' + name;
+                        } else if (res.client.id === 'kkd') {
+                            navName = '크리스피크림도넛 ' + name;
+                        }
+                        // 컨세션('con')은 아무것도 붙이지 않으므로 기본값(name) 유지
+
                         // 네이버 길찾기용 안전한 URL 생성 (앱 스킴 사용)
-                        const encName = encodeURIComponent(name);
+                        const encName = encodeURIComponent(navName);
 
                         // 모바일 네이버 지도 앱을 바로 실행하여 자동차 길찾기 띄우기
                         const nUrl = `nmap://route/car?dlat=${lat}&dlng=${lng}&dname=${encName}&appname=GRSMap`;
-                        
+                     
                         // 3. 인포윈도우 (기존 서식 및 버튼 수정)
                         const info = new naver.maps.InfoWindow({
                             content: `
