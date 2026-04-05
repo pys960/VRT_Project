@@ -81,7 +81,7 @@
             display: flex; flex-direction: column; gap: 8px; 
             width: clamp(110px, 25vw, 140px); transition: transform 0.3s ease-in-out;
             overflow: visible;     
-            max-height: calc(100vh - 120px);
+            max-height: calc(100dvh);
         }
         #controls.collapsed { transform: translateX(calc(100%)); }
 
@@ -97,7 +97,7 @@
         .control-item { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; }
         .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 
-        #dashboard { padding-top: 2px; max-height: 400px; overflow-y: auto; }
+        #dashboard { padding-top: 2px; overflow-y: auto; flex: 1; max-height: 0px; }
         .dash-box { background: #f8f9fa; padding: 8px; border-radius: 8px; border: 1px solid #eee; margin-bottom: 5px; }
         .dash-title { font-size: 10px; color: #666; font-weight: bold; margin-bottom: 2px; display: flex; align-items: center; gap: 4px; }
         .dash-val { font-size: 14px; font-weight: 800; }
