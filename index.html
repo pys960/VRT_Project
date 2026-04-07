@@ -433,11 +433,25 @@
                         (m.get('name') && m.get('name').includes(q)) || 
                         (m.get('code') && m.get('code').includes(q)) || 
                         (m.get('addr') && m.get('addr').includes(q))
-                    ).slice(0, 5);
+                    ).slice(0, 20);
                     
+                    // [추가] 고객사별 뱃지 이름과 색상 설정
+                    const clientMeta = {
+                        'k7': { name: '세븐', color: '#f57c00' },
+                        'ria': { name: '리아', color: '#d32f2f' },
+                        'angel': { name: '엔젤', color: '#795548' },
+                        'kkd': { name: 'KKD', color: '#2e7d32' },
+                        'con': { name: '컨세션', color: '#1976d2' }
+                    };
+
                     matched.forEach(m => { 
-                        html += `<div class="suggestion-item" onclick="handleSelectStore('${m.get('name')}')"><span class="type-badge badge-store">점포</span> ${m.get('name')}</div>`; 
+                        const clientId = m.get('clientId');
+                        const badgeName = clientMeta[clientId] ? clientMeta[clientId].name : '점포';
+                        const badgeColor = clientMeta[clientId] ? clientMeta[clientId].color : '#007AFF';
+
+                        html += `<div class="suggestion-item" onclick="handleSelectStore('${m.get('name')}')"><span class="type-badge" style="background:${badgeColor}">${badgeName}</span> ${m.get('name')}</div>`; 
                     });
+                    
                     list.innerHTML = html; list.style.display = html ? 'block' : 'none';
                 });
             };
@@ -464,7 +478,29 @@
             };
         }
 
-        window.handleSelectStore = (name) => { document.getElementById('address-input').value = name; document.getElementById('autocomplete-list').style.display = 'none'; isSearchMode = true; updateFilters(); const target = allMarkers.find(m => m.get('name') === name.toLowerCase()); if (target) { naverMap.setCenter(target.getPosition()); naverMap.setZoom(17); } };
+        window.handleSelectStore = (name) => { 
+            document.getElementById('address-input').value = name; 
+            document.getElementById('autocomplete-list').style.display = 'none'; 
+            isSearchMode = true; 
+            
+            const target = allMarkers.find(m => m.get('name') === name.toLowerCase()); 
+            
+            if (target) { 
+                const targetClientId = target.get('clientId');
+                const targetCheckbox = document.querySelector(`input[data-client="${targetClientId}"]`);
+                
+                // 해당 점포의 고객사 체크박스가 꺼져있으면 켬
+                if (targetCheckbox && !targetCheckbox.checked) {
+                    targetCheckbox.checked = true;
+                }
+                
+                updateFilters(); 
+                naverMap.setCenter(target.getPosition()); 
+                naverMap.setZoom(17); 
+            } else {
+                updateFilters();
+            }
+        };
         window.handleSelectGeo = (coreName) => { document.getElementById('address-input').value = coreName; document.getElementById('autocomplete-list').style.display = 'none'; isSearchMode = true; updateFilters(); naver.maps.Service.geocode({ query: coreName }, (status, response) => { if (status === naver.maps.Service.Status.OK && response.v2.addresses.length) { const res = response.v2.addresses[0]; naverMap.setCenter(new naver.maps.LatLng(res.y, res.x)); naverMap.setZoom(14); } }); };
 
         function updateFilters() {
