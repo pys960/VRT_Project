@@ -11,25 +11,18 @@
     <style>
         body, html { 
             margin: 0; padding: 0; 
-            
-            /* 화면 크기를 기기 뷰포트에 꽉 차게 명시 */
             width: 100%; height: 100%; 
             overflow: hidden; 
             font-family: 'Pretendard', sans-serif; 
-            
-            /* [핵심 추가] 카카오톡 등 인앱 브라우저에서 화면 전체가 밀리는 현상 강제 방지 */
             position: fixed; 
             top: 0; left: 0; 
             right: 0; bottom: 0;
-            
-            /* 기존 튕김 및 텍스트 선택 방지 속성 유지 */
             overscroll-behavior: none; 
             -webkit-user-select: none; 
             user-select: none; 
             -webkit-touch-callout: none; 
         }
 
-        /* 검색창 텍스트 입력 허용 유지 */
         input {
             -webkit-user-select: auto;
             user-select: auto;
@@ -112,57 +105,28 @@
         }
         .force-show { opacity: 1 !important; z-index: 100; }
 
-        /* 1. 박스 전체 가로 크기를 강제로 고정 */
         .info-box { 
-            padding: 12px 15px; 
-            /* min-width 대신 width를 사용하여 크기를 280px로 딱 고정합니다 */
-            width: 280px; 
-            line-height: 1.6; 
-            background: white; 
-            border-radius: 15px; 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.15); 
-            /* 박스 크기 계산 방식 고정 */
+            padding: 12px 15px; width: 280px; line-height: 1.6; 
+            background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); 
             box-sizing: border-box;
         }
 
-        /* 2. 주소 등 데이터 영역 설정 */
         .info-data { 
-            padding-left: 5px;
-            /* 텍스트가 박스 끝에 닿으면 강제로 줄바꿈 */
-            word-break: break-all; 
-            white-space: normal; 
-            /* 부모 flex 안에서 남은 공간을 다 쓰도록 설정 */
-            flex: 1; 
-            display: inline-block;
-            color: #333;
+            padding-left: 5px; word-break: break-all; white-space: normal; 
+            flex: 1; display: inline-block; color: #333;
         }
 
-        /* 3. 각 항목(주소, 특이사항 등)의 배치 */
         .info-item { 
-            font-size: 13px; 
-            color: #444; 
-            margin-bottom: 6px; 
-            display: flex; 
-            /* 주소가 길어져도 라벨(주소:)은 상단에 고정 */
-            align-items: flex-start; 
+            font-size: 13px; color: #444; margin-bottom: 6px; display: flex; align-items: flex-start; 
         }
 
-        /* 4. 라벨(왼쪽 항목 이름) 고정 폭 설정 */
         .info-label { 
-            font-weight: bold; 
-            color: #666; 
-            /* 라벨 폭을 고정하여 데이터 영역의 줄바꿈 시점을 일정하게 만듦 */
-            width: 55px; 
-            flex-shrink: 0; 
-            margin-right: 5px; 
-            display: flex; 
-            justify-content: space-between; 
+            font-weight: bold; color: #666; width: 55px; flex-shrink: 0; margin-right: 5px; 
+            display: flex; justify-content: space-between; 
         }
 
         .info-header { border-bottom: 2px solid #eee; padding-bottom: 8px; margin-bottom: 10px; }
         .info-title { font-size: 15px; font-weight: bold; }
-
-        .info-label { font-weight: bold; color: #666; width: 45px; flex-shrink: 0; margin-right: 8px; display: flex; justify-content: space-between; }
         .note-highlight { color: #d32f2f; font-weight: bold; }
         
         .btn-group { display: flex; gap: 4px; margin-top: 15px; }
@@ -179,22 +143,9 @@
         #mylocation-btn svg { width: 24px; height: 24px; fill: #444; }
 
         .sheet-btn-outer { 
-            /* 기존: padding: clamp(6px, 1.8vw, 10px) 0; */
-            
-            /* 수정: 상하 여백을 12px~15px 정도로 고정하거나 키워보세요 */
-            padding: 7px 0; 
-            
-            /* 나머지 스타일 유지... */
-            display: block; 
-            width: 100%; 
-            background: #1D6F42; 
-            color: white; 
-            text-decoration: none; 
-            font-size: 13px; 
-            border-radius: 8px; 
-            font-weight: bold; 
-            text-align: center; 
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 7px 0; display: block; width: 100%; background: #1D6F42; color: white; 
+            text-decoration: none; font-size: 13px; border-radius: 8px; font-weight: bold; 
+            text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }   
 
         @keyframes pulse {
@@ -301,31 +252,25 @@
 
             const results = await Promise.all(fetchPromises);
             
-        results.forEach(res => {
+            results.forEach(res => {
                 res.rows.forEach(row => {
                     if (!row || !row.c) return;
                     const gv = (idx) => (row.c[idx] && row.c[idx].v !== null) ? String(row.c[idx].v).trim() : "-";
                     
-                    let code, name, addr, note, asset, status, date, lat, lng;
-
-                    // 1. 고객사별 열 매칭 로직 (데이터가 섞이지 않도록 분리)
-                    if (res.client.id === 'k7') {
-                        code   = gv(0); name = gv(1); addr = gv(2); note = gv(3); asset = gv(4);
-                        status = gv(6); date = formatDate(gv(7));
-                        lat    = parseFloat(row.c[9]?.v);  // J열
-                        lng    = parseFloat(row.c[10]?.v); // K열
-                    } else {
-                        code   = gv(0); name = gv(1); 
-                        addr   = gv(6);   // G열: 주소
-                        note   = gv(4);   // E열: 특이사항
-                        status = gv(2);   // C열: 점검여부
-                        date   = formatDate(gv(3)); // D열: 점검일
-                        asset  = "-";     // 자산라벨 없음
-                        lat    = parseFloat(row.c[7]?.v);  // H열: 위도
-                        lng    = parseFloat(row.c[8]?.v);  // I열: 경도
-                    }
+                    // 🌟 [코드 단축] A~H열이 모든 브랜드 동일하므로, 조건문 없이 한 번에 처리합니다!
+                    const code   = gv(0); // A열 (점포코드)
+                    const name   = gv(1); // B열 (점포명)
+                    const addr   = gv(2); // C열 (주소)
+                    const note   = gv(3); // D열 (특이사항)
+                    const status = gv(4); // E열 (점검여부)
+                    const date   = formatDate(gv(5)); // F열 (확인일자)
+                    const lat    = parseFloat(row.c[6]?.v);  // G열 (위도)
+                    const lng    = parseFloat(row.c[7]?.v);  // H열 (경도)
                     
-                    // 2. 좌표 유효성 검사 (무한 로딩 방지 핵심)
+                    // 자산라벨은 세븐일레븐(k7)만 I열(8)에서 읽어오고, 나머지는 "-" 처리
+                    const asset  = (res.client.id === 'k7') ? gv(8) : "-"; 
+                    
+                    // 좌표 유효성 검사
                     if (name !== "-" && !isNaN(lat) && !isNaN(lng)) {
                         const isFinished = status !== "미완료" && status !== "-";
                         const isExcluded = ['휴점','제외','폐점','리뉴얼'].some(k => status.includes(k));
@@ -339,8 +284,7 @@
                             }
                         });
 
-                        // [추가된 로직] 고객사별 길찾기용 목적지 이름(navName) 조합
-                        let navName = name; // 기본값은 점포명 그대로 설정
+                        let navName = name; 
 
                         if (res.client.id === 'k7') {
                             navName = '세븐일레븐 ' + name;
@@ -351,15 +295,10 @@
                         } else if (res.client.id === 'kkd') {
                             navName = '크리스피크림도넛 ' + name;
                         }
-                        // 컨세션('con')은 아무것도 붙이지 않으므로 기본값(name) 유지
 
-                        // 네이버 길찾기용 안전한 URL 생성 (앱 스킴 사용)
                         const encName = encodeURIComponent(navName);
-
-                        // 모바일 네이버 지도 앱을 바로 실행하여 자동차 길찾기 띄우기
                         const nUrl = `nmap://route/car?dlat=${lat}&dlng=${lng}&dname=${encName}&appname=GRSMap`;
                      
-                        // 3. 인포윈도우 (기존 서식 및 버튼 수정)
                         const info = new naver.maps.InfoWindow({
                             content: `
                                 <div class="info-box">
@@ -384,7 +323,6 @@
                             else { if (activeInfoWindow) activeInfoWindow.close(); info.open(naverMap, marker); activeInfoWindow = info; }
                         });
 
-                        // 4. 검색 기능을 위한 데이터 심기 (연관 키워드 복구)
                         marker.set('clientId', res.client.id);
                         marker.set('name', name.toLowerCase());
                         marker.set('code', code.toLowerCase());
@@ -393,13 +331,11 @@
                         marker.set('excluded', isExcluded);
                         
                         allMarkers.push(marker);
-                        // 통계용 데이터 추가 (여기서 한 번만 수행)
                         masterData.push({ clientId: res.client.id, finished: isFinished, excluded: isExcluded });
                     }
                 });
             });
 
-            // 클러스터링 초기화
             markerClustering = new MarkerClustering({ 
                 minClusterSize: 2, maxZoom: 14, map: naverMap, markers: [], gridSize: 180, 
                 icons: [{ content: '<div style="cursor:pointer;width:50px;height:50px;line-height:50px;font-size:15px;color:white;text-align:center;font-weight:bold;background:rgba(65, 105, 225, 0.85);border:2px solid #fff;border-radius:50%;"></div>', size: N.Size(40, 40), anchor: N.Point(20, 20) }], 
@@ -428,14 +364,12 @@
                         });
                     }
                     
-                    // [검색 로직] 이름, 코드, 주소 통합 검색
                     const matched = allMarkers.filter(m => 
                         (m.get('name') && m.get('name').includes(q)) || 
                         (m.get('code') && m.get('code').includes(q)) || 
                         (m.get('addr') && m.get('addr').includes(q))
                     ).slice(0, 20);
                     
-                    // [추가] 고객사별 뱃지 이름과 색상 설정
                     const clientMeta = {
                         'k7': { name: '세븐', color: '#f57c00' },
                         'ria': { name: '리아', color: '#d32f2f' },
@@ -489,7 +423,6 @@
                 const targetClientId = target.get('clientId');
                 const targetCheckbox = document.querySelector(`input[data-client="${targetClientId}"]`);
                 
-                // 해당 점포의 고객사 체크박스가 꺼져있으면 켬
                 if (targetCheckbox && !targetCheckbox.checked) {
                     targetCheckbox.checked = true;
                 }
@@ -516,7 +449,6 @@
                 const isFinished = m.get('finished');
                 const isExcluded = m.get('excluded');
 
-                // [핵심수정] 제외와 완료 필터가 각각 독립적으로 동작하도록 로직 고정
                 if (isExcluded) {
                     if (!showExcl) return false;
                 } else if (isFinished) {
@@ -535,7 +467,6 @@
             document.querySelectorAll('.marker-label').forEach(el => el.style.opacity = labelOpacity);
             document.getElementById('count-bar').innerText = `반경 10km 내 ${filtered.length}개 점포`;
 
-            // [핵심수정] 체크된 고객사만 통계 유동적으로 표시
             let statHtml = "";
             CONFIG.CLIENTS.forEach(c => {
                 if (activeClients.includes(c.id)) {
