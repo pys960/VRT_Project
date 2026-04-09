@@ -324,9 +324,9 @@
                         });
 
                         marker.set('clientId', res.client.id);
-                        marker.set('name', name.toLowerCase());
-                        marker.set('code', code.toLowerCase());
-                        marker.set('addr', addr.toLowerCase());
+                        marker.set('name', name); // 원본 대소문자 유지
+                        marker.set('code', code);
+                        marker.set('addr', addr);
                         marker.set('finished', isFinished);
                         marker.set('excluded', isExcluded);
                         
@@ -365,9 +365,9 @@
                     }
                     
                     const matched = allMarkers.filter(m => 
-                        (m.get('name') && m.get('name').includes(q)) || 
-                        (m.get('code') && m.get('code').includes(q)) || 
-                        (m.get('addr') && m.get('addr').includes(q))
+                        (m.get('name') && m.get('name').toLowerCase().includes(q)) || 
+                        (m.get('code') && m.get('code').toLowerCase().includes(q)) || 
+                        (m.get('addr') && m.get('addr').toLowerCase().includes(q))
                     ).slice(0, 20);
                     
                     const clientMeta = {
@@ -417,7 +417,8 @@
             document.getElementById('autocomplete-list').style.display = 'none'; 
             isSearchMode = true; 
             
-            const target = allMarkers.find(m => m.get('name') === name.toLowerCase()); 
+            // name.toLowerCase() 제거하고 원본끼리 비교
+            const target = allMarkers.find(m => m.get('name') === name); 
             
             if (target) { 
                 const targetClientId = target.get('clientId');
@@ -434,6 +435,7 @@
                 updateFilters();
             }
         };
+
         window.handleSelectGeo = (coreName) => { document.getElementById('address-input').value = coreName; document.getElementById('autocomplete-list').style.display = 'none'; isSearchMode = true; updateFilters(); naver.maps.Service.geocode({ query: coreName }, (status, response) => { if (status === naver.maps.Service.Status.OK && response.v2.addresses.length) { const res = response.v2.addresses[0]; naverMap.setCenter(new naver.maps.LatLng(res.y, res.x)); naverMap.setZoom(14); } }); };
 
         function updateFilters() {
@@ -455,10 +457,13 @@
                     if (!showComp) return false;
                 }
 
-                if (isSearchMode) {
-                    const q = document.getElementById('address-input').value.toLowerCase();
-                    return m.get('name').includes(q) || m.get('addr').includes(q) || m.get('code').includes(q);
-                }
+            if (isSearchMode) {
+                const q = document.getElementById('address-input').value.toLowerCase();
+                return (m.get('name') && m.get('name').toLowerCase().includes(q)) || 
+                    (m.get('addr') && m.get('addr').toLowerCase().includes(q)) || 
+                    (m.get('code') && m.get('code').toLowerCase().includes(q));
+            }
+            
                 return naverMap.getProjection().getDistance(center, m.getPosition()) <= CONFIG.LIMIT_DISTANCE;
             });
 
