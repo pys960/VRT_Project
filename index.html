@@ -101,7 +101,7 @@
             background: white; padding: 2px 8px; border: 1px solid #666;
             border-radius: 12px; font-size: 11px; font-weight: bold; color: #333;
             white-space: nowrap; box-shadow: 1px 1px 3px rgba(0,0,0,0.2);
-            opacity: 0; transition: opacity 0.2s; pointer-events: none;
+            opacity: 1; transition: opacity 0.2s; pointer-events: none;
         }
         .force-show { opacity: 1 !important; z-index: 100; }
 
@@ -151,6 +151,11 @@
         @keyframes pulse {
             0% { transform: scale(1); opacity: 1; }
             100% { transform: scale(3); opacity: 0; }
+        }
+
+        /* 🚀 지도에 hide-labels 클래스가 붙으면 모든 라벨을 한 번에 숨깁니다 */
+        #map.hide-labels .marker-label { 
+            opacity: 0 !important; 
         }
     </style>
 </head>
@@ -214,6 +219,17 @@
             LIMIT_DISTANCE: 10000,
             VWORLD_KEY: '75E92F21-B180-3443-9876-74919A1B3C83'
         };
+
+        // 🚀 [추가] 모바일 데이터 지연 렌더링(깜빡임 및 멈춤) 방지용 사전 로딩
+        function preloadImages() {
+            CONFIG.CLIENTS.forEach(client => {
+                if (client.icon) {
+                    const img = new Image();
+                    img.src = client.icon; 
+                }
+            });
+        }
+        preloadImages(); // 설정이 끝나자마자 바로 실행
 
         let naverMap, allMarkers = [], markerClustering, activeInfoWindow = null;
         let isSearchMode = false, masterData = [], myLocationMarker = null;
@@ -408,8 +424,14 @@
             });
 
             markerClustering = new MarkerClustering({ 
-                minClusterSize: 2, maxZoom: 14, map: naverMap, markers: [], gridSize: 180, 
-                icons: [{ content: '<div style="cursor:pointer;width:50px;height:50px;line-height:50px;font-size:15px;color:white;text-align:center;font-weight:bold;background:rgba(65, 105, 225, 0.85);border:2px solid #fff;border-radius:50%;"></div>', size: N.Size(40, 40), anchor: N.Point(20, 20) }], 
+                minClusterSize: 2, 
+                maxZoom: 14, 
+                map: naverMap, 
+                markers: [], 
+                gridSize: 180, 
+                // 🚀 모바일 렉 방지를 위해 마커가 DOM에 직접 그려지는 방식을 간소화합니다
+                isStyleWithCSS: true, 
+                icons: [{ content: '<div style="cursor:pointer;width:50px;height:50px;line-height:50px;font-size:15px;color:white;text-align:center;font-weight:bold;background:rgba(65, 105, 225, 0.85);border:2px solid #fff;border-radius:50%; box-shadow: 0 2px 5px rgba(0,0,0,0.2);"></div>', size: N.Size(50, 50), anchor: N.Point(25, 25) }], 
                 stylingFunction: (m, c) => { m.getElement().querySelector('div').innerText = c; } 
             });
             
@@ -539,8 +561,15 @@
             });
 
             markerClustering.setMarkers(filtered);
-            const labelOpacity = (showLabels && zoom >= 14) ? '1' : '0';
-            document.querySelectorAll('.marker-label').forEach(el => el.style.opacity = labelOpacity);
+            
+            // 🚀 최적화: 무거운 querySelectorAll 대신 부모 요소의 클래스만 토글합니다.
+            const mapEl = document.getElementById('map');
+            if (showLabels && zoom >= 14) {
+                mapEl.classList.remove('hide-labels');
+            } else {
+                mapEl.classList.add('hide-labels');
+            }
+            
             document.getElementById('count-bar').innerText = `반경 10km 내 ${filtered.length}개 점포`;
 
             let statHtml = "";
