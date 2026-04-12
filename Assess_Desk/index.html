@@ -1,405 +1,369 @@
-// [설정] 전역 변수 구역
-const FOLDER_ID = "1DKpOcPCJ-g4Fr9djAFbgiHHTnSPP-GdV"; 
-const TEMP_FILE_NAME = "Assess_temp";
-const DONE_COLOR = "#d9ead3"; // 완료 표시 색상 (연한 초록)
-const RESET_COLOR = "#efefef"; // 초기화 시 변경할 배경색 
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    /* 전체 레이아웃 */
+    body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; background-color: #f4f5f7; font-family: 'Malgun Gothic', sans-serif; overflow: hidden; }
+    
+    /* 로딩 화면 */
+    #loading-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.9); z-index: 999; display: none; flex-direction: column; justify-content: center; align-items: center; }
+    .spinner { border: 5px solid #f3f3f3; border-top: 5px solid #1a73e8; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 20px;}
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-function doGet(e) {
-  const html = HtmlService.createTemplateFromFile('Index');
-  return html.evaluate()
-      .setTitle('소견서&견적서 관리페이지')
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
-}
+    /* 메인 앱 레이아웃 */
+    .app-body { display: flex; flex: 1; flex-direction: row; overflow: hidden; width: 100%; }
+    
+    /* 좌측 사이드바 */
+    .sidebar { width: 320px; background: #fff; border-right: 1px solid #ccc; display: flex; flex-direction: column; flex-shrink: 0; z-index: 5;}
+    .sidebar-toolbar { padding: 10px; background: #e8f0fe; border-bottom: 1px solid #ccc; display: flex; flex-direction: row; gap: 5px; }
+    .btn-action { flex: 1; color: white; border: none; padding: 10px 2px; font-size: 11px; border-radius: 4px; font-weight: bold; cursor: pointer; transition: 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    #loadBtn { background: #fbbc04; color: #202124; }
+    #loadBtn:hover:not(:disabled) { background: #f2a500; }
+    #submitBtn { background: #1a73e8; }
+    #submitBtn:hover:not(:disabled) { background: #1557b0; }
+    #resetBtn { background: #ea4335; margin-top: 0; opacity: 0.9; }
+    #resetBtn:hover { opacity: 1; background: #d33828; }
+    .btn-action:disabled { background: #bdc1c6 !important; cursor: not-allowed; box-shadow: none; }
 
-/**
- * 고정 임시 파일에 이미 존재하는 시트 목록을 가져옵니다.
- */
-function getExistingTabs() {
-  const targetFolder = DriveApp.getFolderById(FOLDER_ID);
-  const tempSs = getOrCreateTempFile(targetFolder);
-  const sheets = tempSs.getSheets();
-  const tempSsUrl = tempSs.getUrl().replace(/\/edit.*$/, '');
-  
-  let tabs = [];
-  let quoteMap = {}; // {점포명: GID}
+    /* 사이드바 리스트 및 탭 */
+    .sidebar-header { padding: 12px 15px; border-bottom: 2px solid #ddd; background: #f8f9fa; display: flex; align-items: center; font-weight: bold; font-size: 13px;}
+    .sidebar-list { flex: 1; overflow-y: auto; position: relative; }
+    
+    .tab-item { display: flex; align-items: center; padding: 12px 15px; border-bottom: 1px solid #f0f0f0; cursor: pointer; position: relative; transition: all 0.2s; }
+    .tab-item:hover { background: #f8f9fa; }
+    .tab-item.active { background: #fff9eb; border-left: 5px solid #fbbc04; }
+    .tab-item input[type="checkbox"] { margin-right: 12px; width: 18px; height: 18px; cursor: pointer; flex-shrink: 0; z-index: 2; }
+    .tab-text { flex: 1; font-size: 14px; color: #333; font-weight: 500; z-index: 2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-  // 1. 견적서 시트들을 스캔하여 점포명을 기준으로 GID를 저장합니다.
-  sheets.forEach(sheet => {
-    const sName = sheet.getName();
-    if (sName.includes("_견적서")) {
-      const storeName = String(sheet.getRange("B7").getValue()).trim();
-      if (storeName) {
-        quoteMap[storeName] = sheet.getSheetId();
-      }
+    /* 숫자 아이콘 */
+    .num-icon {
+      display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex-shrink: 0;
+      background-color: #e8f0fe; color: #1a73e8; border-radius: 6px; border: 1px solid #d2e3fc;
+      font-family: 'Arial', sans-serif; font-size: 13px; font-weight: bold; margin-left: 10px;
     }
-  });
+    .tab-item.active .num-icon { background-color: #1a73e8; color: #fff; border-color: #1a73e8; }
 
-  // 2. 소견서 시트들을 스캔하며 매핑
-  sheets.forEach(sheet => {
-    let name = sheet.getName();
-    if (name !== "장비표" && name.includes("번") && !name.includes("_견적서")) {
-      const seq = name.replace("번", "").replace("_Q", "");
-      const storeName = String(sheet.getRange("D10").getValue()).trim() || "점포명없음";
+    /* 우측 분할 화면 */
+    .split-container { display: flex; flex: 1; overflow: hidden; }
+    .view-box { flex: 1; display: flex; justify-content: center; align-items: center; overflow: hidden; position: relative; background: #525659; padding: 0; }
+
+    /* 프레임 및 부드러운 전환 효과 */
+    .iframe-wrapper, .reference-wrapper { 
+      position: relative; width: 83%; height: 90.8vh; 
+      overflow: hidden !important; background: white;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.2); border: 1px solid #ddd; display: none; margin: auto;
+    }
+    .opinion-frame, .data-frame-content { 
+      position: absolute; top: 0; left: 0; width: 1300px; height: 1600px; 
+      transform: scale(0.75); transform-origin: top left;
+      border: none; background: white; pointer-events: auto;
+      opacity: 0; transition: opacity 0.4s ease-in-out; 
+    }
+    .opinion-frame.loaded { opacity: 1; }
+
+    /* 커스텀 모달 공통 스타일 */
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 9999; }
+    .custom-modal {
+      display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      background: #2d2e30; color: white; padding: 30px 40px; border-radius: 12px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.7); z-index: 10000; text-align: center;
+      min-width: 350px; border: 1px solid #444;
+    }
+    .modal-msg { font-size: 15px; line-height: 1.6; margin-bottom: 25px; white-space: pre-line; }
+    .modal-btn-group { display: flex; justify-content: center; gap: 15px; }
+    
+    /* PDF 선택 버튼 그룹 세로 정렬 */
+    .pdf-btn-group { display: flex; flex-direction: column; gap: 12px; }
+    
+    .btn-modal { padding: 10px 30px; border: none; border-radius: 20px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+    .btn-confirm { background: #d9ead3; color: #333; }
+    .btn-cancel { background: #666; color: white; }
+    .btn-confirm:hover { background: #c2d9bc; }
+
+    iframe { width: 100%; height: 100%; border: none; background: white; }
+    .divider { width: 4px; background: #323639; cursor: col-resize; z-index: 5; }
+    .placeholder-text { position: absolute; top:0; left:0; width:100%; height:100%; display: flex; flex-direction: column; justify-content: center; align-items: center; font-size: 15px; font-weight: bold; text-align: center; color: #aaa; }
+  </style>
+</head>
+<body>
+
+  <div id="loading-overlay">
+    <div class="spinner"></div>
+    <h2 id="loading-msg" style="color:#1a73e8;">데이터 처리 중...</h2>
+  </div>
+
+  <div class="app-body" id="main-view">
+    <div class="sidebar">
+      <div class="sidebar-toolbar">
+        <button id="loadBtn" class="btn-action" onclick="loadDataFromServer()">📥 데이터<br>불러오기</button>
+        <button id="submitBtn" class="btn-action" onclick="openPDFModal()" disabled>🖨️ 선택 항목<br>PDF 자동 생성</button>
+        <button id="resetBtn" class="btn-action" onclick="showConfirmReset()">🗑️ 목록 초기화</button>
+      </div>
+      <div class="sidebar-header">
+        <input type="checkbox" id="selectAllCheckbox" onchange="toggleAll(this)" checked disabled>
+        <span style="cursor:pointer;" onclick="document.getElementById('selectAllCheckbox').click()">전체 선택</span>
+      </div>
+      <div id="tabs-area" class="sidebar-list">
+        <div id="sidebar-placeholder" class="placeholder-text">목록이 비어있습니다.</div>
+      </div>
+    </div>
+
+    <div class="split-container">
+      <div class="view-box">
+        <div id="left-placeholder" class="placeholder-text">📄 소견서 미리보기</div>
+        <div class="iframe-wrapper" id="left-iframe-container">
+          <iframe id="sheet-frame" class="opinion-frame" src=""></iframe>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="view-box">
+        <div id="right-placeholder" class="placeholder-text">📊 견적서 미리보기</div>
+        <div class="reference-wrapper" id="right-iframe-container" style="display:none;">
+          <iframe id="quote-frame" class="opinion-frame" src=""></iframe>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-backdrop" class="modal-overlay"></div>
+
+  <div id="custom-alert" class="custom-modal">
+    <p id="alert-message" class="modal-msg"></p>
+    <button class="btn-modal btn-confirm" onclick="closeAlert()">확인</button>
+  </div>
+
+  <div id="custom-confirm" class="custom-modal">
+    <p id="confirm-message" class="modal-msg"></p>
+    <div class="modal-btn-group">
+      <button class="btn-modal btn-confirm" onclick="executeReset()">초기화</button>
+      <button class="btn-modal btn-cancel" onclick="closeConfirm()">취소</button>
+    </div>
+  </div>
+
+  <div id="pdf-modal" class="custom-modal">
+    <p class="modal-msg" style="font-weight:bold;">생성할 PDF 종류를 선택해 주세요.</p>
+    <div class="pdf-btn-group">
+      <button class="btn-modal btn-confirm" onclick="executePDFGeneration('ALL')">📄 소견서 및 견적서 모두 생성</button>
+      <button class="btn-modal btn-confirm" style="background:#fff9eb;" onclick="executePDFGeneration('SOGYEON')">📝 소견서 파일만 생성</button>
+      <button class="btn-modal btn-confirm" style="background:#e8f0fe;" onclick="executePDFGeneration('QUOTE')">📊 견적서 파일만 생성</button>
+      <button class="btn-modal btn-cancel" onclick="closePDFModal()">취소</button>
+    </div>
+  </div>
+
+  <script>
+
+    // 🌟 여기에 구글 앱스 스크립트 배포 URL을 넣으세요.
+    const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxzwgZVwqagAuA_eUozvxcpvR5FfZGQmotjGCRQ_Nz8aE5M3b_Lz2QXneDafkMe1043Zg/exec";
+
+    // 접속 시 즉시 이동
+    window.location.replace(GOOGLE_SCRIPT_URL);
+
+    let tempPayload = { tabs: [] }; 
+
+    // 🌟 에러의 원인이었던 새로고침(reload) 파라미터와 로직을 완전히 삭제했습니다.
+    function showAlert(msg) { 
+      document.getElementById('alert-message').innerText = msg;
+      document.getElementById('modal-backdrop').style.display = 'block';
+      document.getElementById('custom-alert').style.display = 'block';
+    }
+    
+    function closeAlert() {
+      document.getElementById('modal-backdrop').style.display = 'none';
+      document.getElementById('custom-alert').style.display = 'none';
+    }
+    
+    function showConfirmReset() {
+      document.getElementById('confirm-message').innerText = "기존 목록을 초기화합니다";
+      document.getElementById('modal-backdrop').style.display = 'block';
+      document.getElementById('custom-confirm').style.display = 'block';
+    }
+    
+    function closeConfirm() {
+      document.getElementById('modal-backdrop').style.display = 'none';
+      document.getElementById('custom-confirm').style.display = 'none';
+    }
+
+    // --- 🌟 데이터 처리 로직 ---
+    window.onload = function() { checkExistingData(); };
+
+    function checkExistingData() {
+      document.getElementById('loading-overlay').style.display = 'flex';
+      document.getElementById('loading-msg').innerText = "기존 목록 확인 중...";
+      google.script.run.withSuccessHandler(setupUI).getExistingTabs();
+    }
+
+    function loadDataFromServer() {
+      const loadingOverlay = document.getElementById('loading-overlay');
+      loadingOverlay.style.display = 'flex';
+      document.getElementById('loading-msg').innerText = "시트에서 데이터를 읽어오는 중...";
       
-      let qUrl = "";
-      // 🌟 이 소견서가 견적서 대상(_Q)이고, quoteMap에 해당 점포명의 견적서가 존재하면 URL 부여
-      if (name.includes("_Q") && quoteMap[storeName]) { 
-        qUrl = `${tempSsUrl}/edit?rm=minimal&gid=${quoteMap[storeName]}`;
-      }
+      google.script.run.withSuccessHandler(function(result) {
+          loadingOverlay.style.display = 'none'; 
+          if (result && result.tabs && result.tabs.length > 0) {
+            // 🌟 알림창 띄우기 전에 화면을 즉시 갱신해버립니다!
+            setupUI(result);
+            showAlert("✅ 총 " + result.tabs.length + "건의 데이터 불러오기 완료");
+          } else {
+            showAlert("⚠️ 새롭게 불러올 데이터가 없습니다.");
+          }
+      }).initializeSystem();
+    }
 
-      tabs.push({
-        seq: seq, 
-        storeName: storeName,
-        url: `${tempSsUrl}/edit?rm=minimal&gid=${sheet.getSheetId()}`,
-        quoteUrl: qUrl 
+    function setupUI(payload) {
+      document.getElementById('loading-overlay').style.display = 'none';
+      
+      // 🌟 [핵심 로직] 데이터가 없거나 초기화되었을 때: 새로고침 없이 즉각 화면을 빈 상태로 만듦
+      if (!payload || !payload.tabs || payload.tabs.length === 0) {
+        tempPayload = { tabs: [] };
+        document.getElementById('tabs-area').innerHTML = '<div id="sidebar-placeholder" class="placeholder-text">목록이 비어있습니다.</div>';
+        document.getElementById('left-iframe-container').style.display = 'none';
+        document.getElementById('right-iframe-container').style.display = 'none';
+        document.getElementById('left-placeholder').style.display = 'flex';
+        document.getElementById('right-placeholder').style.display = 'flex';
+        document.getElementById('right-placeholder').innerText = "📊 견적서 미리보기";
+        document.getElementById('submitBtn').disabled = true;
+        document.getElementById('selectAllCheckbox').disabled = true;
+        document.getElementById('selectAllCheckbox').checked = false;
+        return; 
+      }
+      
+      // 데이터가 있는 경우: 기존 로직대로 화면을 그림
+      tempPayload = payload;
+      let combinedTabs = [...tempPayload.tabs, ...payload.tabs];
+      const uniqueTabs = [];
+      const seenSeqs = new Set();
+      combinedTabs.forEach(tab => {
+        if (!seenSeqs.has(tab.seq)) {
+          uniqueTabs.push(tab);
+          seenSeqs.add(tab.seq);
+        }
       });
-    }
-  });
-  
-  tabs.sort((a, b) => parseInt(a.seq) - parseInt(b.seq));
-  const referenceUrl = `${SpreadsheetApp.getActiveSpreadsheet().getUrl().replace(/\/edit.*$/, '')}/edit?rm=minimal&gid=${SpreadsheetApp.getActiveSpreadsheet().getSheetByName("장비표").getSheetId()}`;
+      uniqueTabs.sort((a, b) => parseInt(a.seq) - parseInt(b.seq));
+      tempPayload.tabs = uniqueTabs;
 
-  return { 
-    tempFileId: tempSs.getId(), 
-    tabs: tabs, 
-    referenceUrl: referenceUrl 
-  };
-}
+      document.getElementById('sidebar-placeholder').style.display = 'none';
+      document.getElementById('left-placeholder').style.display = 'none';
+      document.getElementById('right-placeholder').style.display = 'none';
+      document.getElementById('left-iframe-container').style.display = 'block';
+      document.getElementById('right-iframe-container').style.display = 'block';
+      document.getElementById('submitBtn').disabled = false;
+      document.getElementById('selectAllCheckbox').disabled = false;
 
-function getOrCreateTempFile(folder) {
-  const files = folder.getFilesByName(TEMP_FILE_NAME);
-  if (files.hasNext()) return SpreadsheetApp.open(files.next());
-  const newSs = SpreadsheetApp.create(TEMP_FILE_NAME);
-  DriveApp.getFileById(newSs.getId()).moveTo(folder);
-  return newSs;
-}
-
-function resetTempFile() {
-  try {
-    const origSs = SpreadsheetApp.getActiveSpreadsheet();
-    const dataSheet = origSs.getSheetByName("소견서 점포 추출");
-    const targetFolder = DriveApp.getFolderById(FOLDER_ID);
-    const tempSs = getOrCreateTempFile(targetFolder);
-    
-    const lastCol = dataSheet.getLastColumn();
-    if (lastCol >= 3) {
-      dataSheet.getRange(5, 3, 1, lastCol - 2).setBackground(RESET_COLOR);
-      // 🌟 [추가] 초기화 시 29행(견적서 상태)의 배경색도 같이 초기화합니다.
-      dataSheet.getRange(29, 3, 1, lastCol - 2).setBackground(RESET_COLOR);
-    }
-
-    const sheets = tempSs.getSheets();
-    for (let i = 0; i < sheets.length; i++) {
-      if (sheets[i].getName() !== "장비표") {
-        tempSs.deleteSheet(sheets[i]);
-      }
-    }
-    
-    SpreadsheetApp.flush(); 
-    return "SUCCESS";
-  } catch (e) {
-    return "ERROR: " + e.toString();
-  }
-}
-
-// 1. 데이터 초기화 및 필터링 추출
-function initializeSystem() {
-  const origSs = SpreadsheetApp.getActiveSpreadsheet();
-  const dataSheet = origSs.getSheetByName("소견서 점포 추출");
-  const templateSheet = origSs.getSheetByName("소견서 양식");
-  const templateGyeonjeok = origSs.getSheetByName("견적서 양식");
-  const equipmentSheet = origSs.getSheetByName("장비표");
-  const targetFolder = DriveApp.getFolderById(FOLDER_ID);
-  
-  const tempSs = getOrCreateTempFile(targetFolder);
-  
-  if (!tempSs.getSheetByName("장비표")) {
-    const tempEquipSheet = equipmentSheet.copyTo(tempSs);
-    tempEquipSheet.setName("장비표");
-  }
-  
-  const defaultSheet = tempSs.getSheetByName("시트1") || tempSs.getSheetByName("Sheet1");
-  if (defaultSheet) tempSs.deleteSheet(defaultSheet);
-
-  const lastCol = dataSheet.getLastColumn();
-  let storeQuotes = {}; 
-
-  for (let col = 3; col <= lastCol; col++) {
-    const range5 = dataSheet.getRange(5, col);     // 소견서 상태 셀
-    const range29 = dataSheet.getRange(29, col);   // 🌟 견적서 상태 셀 (추가됨)
-    
-    const hasSogyeonData = !!dataSheet.getRange(6, col).getValue();
-    const hasQuoteData = !!dataSheet.getRange(30, col).getValue() && !!dataSheet.getRange(31, col).getValue();
-
-    // 🌟 [수정] 소견서와 견적서의 완료(배경색) 상태를 독립적으로 검사합니다.
-    const isSogyeonNew = range5.getBackground() !== DONE_COLOR && hasSogyeonData;
-    const isQuoteNew = range29.getBackground() !== DONE_COLOR && hasQuoteData;
-    
-    if (isSogyeonNew || isQuoteNew) {
-      const seqNum = range5.getValue() || (col - 2);
+      const tabsArea = document.getElementById('tabs-area');
+      tabsArea.innerHTML = '';
+      tempPayload.tabs.forEach((tab, index) => {
+        const tabEl = document.createElement('div');
+        tabEl.className = `tab-item`;
+        tabEl.id = `tab_${index}`;
+        tabEl.innerHTML = `
+          <input type="checkbox" class="target-checkbox" value="${tab.seq}" onchange="checkStatus()" checked>
+          <span class="tab-text" style="margin-left:10px">${tab.storeName}</span>
+          <div class="num-icon">${tab.seq}</div>
+        `;
+        tabEl.onclick = (e) => { if(e.target.type !== 'checkbox') showTab(index); };
+        tabsArea.appendChild(tabEl);
+      });
       
-      // 이미 생성된 시트가 있는지 확인 (_Q가 붙었는지도 체크)
-      let currentSheet = tempSs.getSheetByName(`${seqNum}번`) || tempSs.getSheetByName(`${seqNum}번_Q`);
+      if (document.querySelectorAll('.tab-item.active').length === 0) {
+        showTab(tempPayload.tabs.length - 1);
+      }
+    }
+
+    function showTab(index) {
+      if(index < 0 || !tempPayload.tabs[index]) return;
+      document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+      const activeTab = document.getElementById(`tab_${index}`);
+      if(activeTab) activeTab.classList.add('active');
       
-      // --- 1. 소견서 데이터 처리 ---
-      if (isSogyeonNew) {
-        if (!currentSheet) {
-          currentSheet = templateSheet.copyTo(tempSs);
-          currentSheet.setName(`${seqNum}번`);
-        }
-        
-        const colData = dataSheet.getRange(6, col, 23, 1).getValues();
-        const fullText = String(colData[0][0]);
-        const row27Value = String(colData[21][0]); 
-        const extractedDevice = (fullText.match(/\(([^)]+)\)/) || ["", ""])[1].trim();
-
-        let P27Result = "";
-        if (fullText.includes("신규교체")) P27Result = "신규 장비 구매";
-        else if (fullText.includes("오버홀")) P27Result = (row27Value === "점포 내 자산 없음") ? "오버홀 장비 도입" : "오버홀 장비 교체";
-
-        let keywordFound = "";
-        const targetText = String(colData[5][0]).replace(/\s/g, "").toLowerCase(); 
-        const deviceNameClean = extractedDevice.replace(/[^a-zA-Z0-9]/g, "").toLowerCase(); 
-
-        if (deviceNameClean !== "" && targetText !== "") {
-          const equipHeader = equipmentSheet.getRange(20, 1, 1, equipmentSheet.getLastColumn()).getValues()[0];
-          let targetColIdx = -1;
-          for (let i = 0; i < equipHeader.length; i++) {
-            let headerClean = String(equipHeader[i]).replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
-            if (headerClean === deviceNameClean) { targetColIdx = i; break; }
-          }
-          if (targetColIdx !== -1) {
-            const keywords = equipmentSheet.getRange(21, targetColIdx + 1, 15, 1).getValues();
-            for (let k = 0; k < keywords.length; k++) {
-              let kw = String(keywords[k][0]).trim();
-              if (kw !== "") {
-                let kwClean = kw.replace(/\s/g, "").toLowerCase();
-                if (targetText.indexOf(kwClean) !== -1) { keywordFound = kw; break; }
-              }
-            }
-          }
-        }
-
-        // 소견서 값 입력
-        currentSheet.getRange("D10").setValue(colData[1][0]);
-        currentSheet.getRange("D11").setValue(colData[2][0]);
-        currentSheet.getRange("D12").setValue(colData[3][0]);
-        currentSheet.getRange("D16").setValue("'" + String(colData[7][0])); 
-        currentSheet.getRange("D17").setValue(colData[6][0]);
-        currentSheet.getRange("D18").setValue(extractedDevice);
-        currentSheet.getRange("H29").setValue(colData[4][0]);
-        currentSheet.getRange("H31").setValue(colData[5][0]);
-        
-        const defectData = [
-          [colData[8][0], "", "", "", colData[9][0]], [colData[10][0], "", "", "", colData[11][0]],
-          [colData[12][0], "", "", "", colData[13][0]], [colData[14][0], "", "", "", colData[15][0]],
-          [colData[16][0], "", "", "", colData[17][0]], [colData[18][0], "", "", "", colData[19][0]]
-        ];
-        currentSheet.getRange("D21:H26").setValues(defectData);
-        currentSheet.getRange("H32").setValue(colData[20][0]);
-        currentSheet.getRange("H33").setValue(colData[21][0]);
-        currentSheet.getRange("H34").setValue(colData[22][0]);
-        currentSheet.getRange("K18").setValue(keywordFound); 
-        currentSheet.getRange("P27").setValue(P27Result); 
-
-        const hRange = currentSheet.getRange("D21:H26");
-        const hValues = hRange.getValues();
-        hRange.setBackground(null); 
-        for (let i = 0; i < hValues.length; i++) {
-          if (hValues[i][0] !== "") currentSheet.getRange(21 + i, 4, 1, 5).setBackground("#fce4d6");
-        }
-
-        range5.setBackground(DONE_COLOR); // 5행 완료 처리
-      }
-
-      // --- 2. 견적서 데이터 처리 ---
-      if (isQuoteNew) {
-        const gyeonData = dataSheet.getRange(29, col, 8, 1).getValues();
-        const storeName = String(gyeonData[2][0]).trim(); 
-        
-        if (storeName && gyeonData[1][0]) { 
-          // 🌟 견적서 대상임을 표시하기 위해 시트 이름에 _Q를 붙입니다.
-          if (currentSheet && !currentSheet.getName().includes("_Q")) {
-            currentSheet.setName(`${seqNum}번_Q`);
-          }
-
-          if (!storeQuotes[storeName]) {
-            storeQuotes[storeName] = {
-              firstSeq: seqNum, 
-              email: String(gyeonData[3][0]).trim(), 
-              items: []
-            };
-          }
-          storeQuotes[storeName].items.push({
-            category: gyeonData[4][0],
-            model: gyeonData[5][0],
-            itemName: gyeonData[6][0],
-            qty: gyeonData[7][0]
-          });
-        }
-        
-        range29.setBackground(DONE_COLOR); // 🌟 29행 완료 처리 추가
-      }
-    }
-  }
-
-  // 🌟 기존에 생성된 견적서 시트 스캔하여 중복 생성 방지
-  let existingQuoteNames = {};
-  tempSs.getSheets().forEach(s => {
-    const sName = s.getName();
-    if (sName.includes("_견적서")) {
-      const sStore = String(s.getRange("B7").getValue()).trim();
-      if (sStore) existingQuoteNames[sStore] = sName;
-    }
-  });
-
-  // 견적서 시트 생성 (행 삽입 및 수식 강제 갱신)
-  for (let store in storeQuotes) {
-    const data = storeQuotes[store];
-    
-    // 이 점포명의 견적서가 이미 존재한다면 해당 시트를 사용하고, 없으면 새로 생성합니다.
-    const sheetName = existingQuoteNames[store] ? existingQuoteNames[store] : `${data.firstSeq}번_견적서`; 
-    
-    let qSheet = tempSs.getSheetByName(sheetName);
-    let isNewSheet = false;
-
-    if (!qSheet) {
-      qSheet = templateGyeonjeok.copyTo(tempSs);
-      qSheet.setName(sheetName); 
-      qSheet.getRange("B7").setValue(store);      
-      qSheet.getRange("B9").setValue(data.email); 
-      isNewSheet = true;
-    }
-
-    let targetRow = 15; 
-    let currentSeq = 1; 
-    
-    if (!isNewSheet) {
-      while (true) {
-        let cellValue = qSheet.getRange(targetRow, 3).getValue();
-        if (cellValue === "" || String(cellValue).includes("합계") || String(cellValue).includes("총액")) {
-          break; 
-        }
-        targetRow++;
-      }
-      if (targetRow > 15) {
-        let lastSeq = parseInt(qSheet.getRange(targetRow - 1, 1).getValue()) || 0;
-        currentSeq = lastSeq + 1;
-      }
-    }
-
-    for (let i = 0; i < data.items.length; i++) {
-      const item = data.items[i];
-      let currentRow = targetRow + i;
-
-      if (!(isNewSheet && i === 0)) {
-        qSheet.insertRowBefore(currentRow); 
-        qSheet.getRange(currentRow - 1, 1, 1, 8).copyTo(qSheet.getRange(currentRow, 1, 1, 8));
-        qSheet.getRange(currentRow, 2, 1, 5).clearContent(); 
-      }
+      const tab = tempPayload.tabs[index];
       
-      qSheet.getRange(currentRow, 1).setValue(currentSeq + i); 
-      qSheet.getRange(currentRow, 2).setValue(`${item.category} ${item.model}`); 
-      qSheet.getRange(currentRow, 3).setValue(item.itemName); 
-      qSheet.getRange(currentRow, 6).setValue(item.qty);      
-    }
+      const sFrame = document.getElementById('sheet-frame');
+      const qFrame = document.getElementById('quote-frame');
+      const rPlaceholder = document.getElementById('right-placeholder');
+      const rContainer = document.getElementById('right-iframe-container');
 
-    // 🌟 합계 수식 범위 강제 갱신 (H15부터 합계행 바로 위까지 SUM)
-    for (let r = 15; r <= qSheet.getMaxRows(); r++) {
-      let cellVal = String(qSheet.getRange(r, 3).getValue());
-      if (cellVal.includes("합계") || cellVal.includes("총액")) {
-        qSheet.getRange(r, 8).setFormula(`=SUM(H15:H${r-1})`);
-        break;
-      }
-    }
-  }
-
-  SpreadsheetApp.flush(); 
-  return getExistingTabs();
-}
-
-/**
- * PDF 생성 로직 (파일명 6행, 30행 매핑)
- */
-function generateFinalPDFs(payload) {
-  const { tempFileId, tabs, selectedSeqs, pdfType } = payload;
-  const targetFolder = DriveApp.getFolderById(FOLDER_ID);
-  const tempSs = SpreadsheetApp.openById(tempFileId);
-  const tempSsUrl = tempSs.getUrl().replace(/\/edit.*$/, '');
-  const token = ScriptApp.getOAuthToken();
-  const dateStr = Utilities.formatDate(new Date(), "GMT+9", "yyMMdd");
-  let fileUrls = [];
-
-  const origSs = SpreadsheetApp.getActiveSpreadsheet();
-  const dataSheet = origSs.getSheetByName("소견서 점포 추출");
-
-  const pdfOptions = '&exportFormat=pdf&format=pdf&size=7&portrait=true&fitw=true&gridlines=false&printnotes=false&sheetnames=false&printtitle=false&pagenumbers=false&fzr=false&top_margin=0.25&bottom_margin=0.25&left_margin=0.25&right_margin=0.25';
-
-  // 1. 선택된 소견서와 연결된 견적서 ID 추출
-  let quoteGids = new Set();
-  selectedSeqs.forEach(seq => {
-    const tab = tabs.find(t => String(t.seq) === String(seq));
-    if (tab && tab.quoteUrl) {
-      const match = tab.quoteUrl.match(/gid=([0-9]+)/);
-      if (match) quoteGids.add(match[1]);
-    }
-  });
-
-  // 2. 순번으로 열 인덱스를 찾기 위한 매핑 준비 (5행 기준)
-  const lastCol = dataSheet.getLastColumn();
-  const seqValues = dataSheet.getRange(5, 1, 1, lastCol).getValues()[0];
-  const seqToColMap = {}; 
-  for (let i = 0; i < seqValues.length; i++) {
-    if (seqValues[i]) seqToColMap[String(seqValues[i])] = i + 1; 
-  }
-
-  // 3. 파일 생성 실행
-  const sheets = tempSs.getSheets();
-  sheets.forEach(sheet => {
-    const name = sheet.getName();
-    const gid = String(sheet.getSheetId());
-    
-    if (name === "장비표") return;
-    
-    let exportThis = false;
-    let fileName = "";
-    
-    let isQuote = name.includes("_견적서");
-    let isSogyeon = !isQuote && name.includes("번");
-
-    if (isQuote && (pdfType === 'ALL' || pdfType === 'QUOTE')) {
-      if (quoteGids.has(gid)) { 
-        exportThis = true; 
-        const seq = name.replace("번_견적서", "");
-        const targetCol = seqToColMap[seq];
-        // 🌟 견적서는 30행 값 사용
-        const titleValue = targetCol ? dataSheet.getRange(30, targetCol).getValue() : "견적서";
-        fileName = `${titleValue}_${dateStr}`;
-      }
-    } else if (isSogyeon && (pdfType === 'ALL' || pdfType === 'SOGYEON')) {
-      const cleanSeq = name.replace("번", "").replace("_Q", "");
-      if (selectedSeqs.includes(cleanSeq)) { 
-        exportThis = true; 
-        const targetCol = seqToColMap[cleanSeq];
-        // 🌟 소견서는 6행 값 사용
-        const titleValue = targetCol ? dataSheet.getRange(6, targetCol).getValue() : "소견서";
-        fileName = `${titleValue}_${dateStr}`;
+      sFrame.classList.remove('loaded'); 
+      sFrame.src = tab.url;
+      sFrame.onload = function() { sFrame.classList.add('loaded'); }; 
+      
+      if (tab.quoteUrl) {
+        qFrame.classList.remove('loaded');
+        qFrame.src = tab.quoteUrl;
+        rContainer.style.display = 'block';
+        rPlaceholder.style.display = 'none';
+        qFrame.onload = function() { qFrame.classList.add('loaded'); };
+      } else {
+        qFrame.src = "";
+        rContainer.style.display = 'none';
+        rPlaceholder.style.display = 'flex';
+        rPlaceholder.innerText = "📊 해당 품목은 견적서 대상이 아닙니다.";
       }
     }
 
-    if (exportThis) {
-      const url = `${tempSsUrl}/export?gid=${gid}${pdfOptions}`;
-      const res = UrlFetchApp.fetch(url, { headers: { 'Authorization': 'Bearer ' + token }, muteHttpExceptions: true });
-      if (res.getResponseCode() === 200) {
-        const file = targetFolder.createFile(res.getBlob().setName(`${fileName}.pdf`));
-        fileUrls.push(file.getUrl());
+    function executeReset() {
+      closeConfirm();
+      const loadingOverlay = document.getElementById('loading-overlay');
+      loadingOverlay.style.display = 'flex';
+      document.getElementById('loading-msg').innerText = "기존 목록 초기화 중...";
+      
+      google.script.run.withSuccessHandler(function(result) {
+          loadingOverlay.style.display = 'none';
+          if (result === "SUCCESS") {
+            // 🌟 서버 초기화가 성공하면, 빈 배열을 넘겨서 화면을 즉시 싹 지워버립니다!
+            setupUI({ tabs: [] });
+            showAlert("✅ 모든 데이터가 초기화 완료");
+          } else {
+            showAlert("⚠️ 알림: " + result);
+          }
+      }).resetTempFile();
+    }
+
+    function toggleAll(source) { document.querySelectorAll('.target-checkbox').forEach(cb => cb.checked = source.checked); }
+    function checkStatus() {
+      const all = document.querySelectorAll('.target-checkbox');
+      const checked = document.querySelectorAll('.target-checkbox:checked');
+      document.getElementById('selectAllCheckbox').checked = (all.length === checked.length);
+    }
+
+    function openPDFModal() {
+      const checked = document.querySelectorAll('.target-checkbox:checked');
+      if (checked.length === 0) return showAlert("⚠️ 변환할 항목을 선택해 주세요.");
+      
+      document.getElementById('modal-backdrop').style.display = 'block';
+      document.getElementById('pdf-modal').style.display = 'block';
+    }
+
+    function closePDFModal() {
+      document.getElementById('modal-backdrop').style.display = 'none';
+      document.getElementById('pdf-modal').style.display = 'none';
+    }
+
+    function executePDFGeneration(pdfType) {
+      closePDFModal(); 
+      
+      const checked = document.querySelectorAll('.target-checkbox:checked');
+      const selectedSeqs = Array.from(checked).map(cb => cb.value);
+      
+      tempPayload.selectedSeqs = selectedSeqs;
+      tempPayload.pdfType = pdfType; 
+      
+      const btn = document.getElementById('submitBtn');
+      btn.innerHTML = `⏳ 생성 중...`;
+      btn.disabled = true;
+      google.script.run.withSuccessHandler(showResults).generateFinalPDFs(tempPayload);
+    }
+
+    function showResults(fileUrls) {
+      const btn = document.getElementById('submitBtn');
+      btn.innerHTML = `🖨️ 선택 항목<br>PDF 자동 생성`;
+      btn.disabled = false;
+      if (fileUrls && fileUrls.length > 0) {
+        showAlert(`✅ 총 ${fileUrls.length}건의 PDF 변환 완료 \n\n파일은 드라이브 폴더에서 확인하세요.`);
+      } else {
+        showAlert("⚠️ 조건에 맞는 생성 파일이 없습니다.");
       }
     }
-  });
-  
-  return fileUrls;
-}
-
-function getScriptUrl() {
-  return ScriptApp.getService().getUrl();
-}
+  </script>
+</body>
+</html>
