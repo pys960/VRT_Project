@@ -154,7 +154,7 @@
   <script>
 
     // 🌟 여기에 구글 앱스 스크립트 배포 URL을 넣으세요.
-    const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwYYtCt0_SXVN_GlB16NNVNYT2q2AYkV3FEkEIV73Fw54sKPM5E0gLbh7kw4B07Mktd/exec";
+    const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzxIBh0kCyiOK8jatTAabh-illGPAzaExs0j5Ok8b2RcTXnd_m738V6PPWD0mTWTXxhlg/exec";
 
     // 접속 시 즉시 이동
     window.location.replace(GOOGLE_SCRIPT_URL);
@@ -339,27 +339,59 @@
       document.getElementById('pdf-modal').style.display = 'none';
     }
 
-    function executePDFGeneration(pdfType) {
+    async function executePDFGeneration(pdfType) {
       closePDFModal(); 
       
       const checked = document.querySelectorAll('.target-checkbox:checked');
       const selectedSeqs = Array.from(checked).map(cb => cb.value);
       
-      tempPayload.selectedSeqs = selectedSeqs;
-      tempPayload.pdfType = pdfType; 
+      if (selectedSeqs.length === 0) return;
       
       const btn = document.getElementById('submitBtn');
       btn.innerHTML = `⏳ 생성 중...`;
       btn.disabled = true;
-      google.script.run.withSuccessHandler(showResults).generateFinalPDFs(tempPayload);
-    }
 
-    function showResults(fileUrls) {
-      const btn = document.getElementById('submitBtn');
+      // 🌟 로딩 오버레이를 띄우고 텍스트 요소를 가져옵니다.
+      const loadingOverlay = document.getElementById('loading-overlay');
+      const loadingMsg = document.getElementById('loading-msg');
+      loadingOverlay.style.display = 'flex';
+
+      let allUrls = [];
+      const total = selectedSeqs.length;
+
+      // 🌟 [핵심] 클라이언트에서 1건씩 서버에 요청하며 진행률(1/9, 2/9...)을 갱신합니다.
+      for (let i = 0; i < total; i++) {
+        loadingMsg.innerText = `PDF 파일 생성 중... (${i + 1} / ${total})`;
+
+        try {
+          // Promise를 사용하여 서버 처리가 끝날 때까지 기다립니다(await).
+          const urls = await new Promise((resolve, reject) => {
+            google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler(reject)
+              .generateFinalPDFs({
+                tempFileId: tempPayload.tempFileId,
+                tabs: tempPayload.tabs,
+                selectedSeqs: [selectedSeqs[i]], // 전체 배열 대신 1건의 순번만 보냄
+                pdfType: pdfType
+              });
+          });
+
+          if (urls && urls.length > 0) {
+            allUrls = allUrls.concat(urls);
+          }
+        } catch (error) {
+          console.error(selectedSeqs[i] + "번 생성 실패:", error);
+        }
+      }
+
+      // 모든 작업이 끝나면 로딩창을 숨기고 결과를 알려줍니다.
+      loadingOverlay.style.display = 'none';
       btn.innerHTML = `🖨️ 선택 항목<br>PDF 자동 생성`;
       btn.disabled = false;
-      if (fileUrls && fileUrls.length > 0) {
-        showAlert(`✅ 총 ${fileUrls.length}건의 PDF 변환 완료 \n\n파일은 드라이브 폴더에서 확인하세요.`);
+
+      if (allUrls.length > 0) {
+        showAlert(`✅ 총 ${allUrls.length}건의 PDF 변환 완료 \n\n파일은 드라이브 폴더에서 확인하세요.`);
       } else {
         showAlert("⚠️ 조건에 맞는 생성 파일이 없습니다.");
       }
