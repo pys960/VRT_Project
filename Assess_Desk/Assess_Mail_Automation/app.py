@@ -33,7 +33,7 @@ def create_draft_logic(recipient, cc, subject):
                 <br>
                 <span style="color: blue; font-weight: bold;">소견서 및 견적서 요청 외 다른 문의</span>는 아래 연락처로 부탁드립니다.<br>
                 <br>
-                <table border="1" style="border-collapse: collapse; text-align: center; width: 350px; font-size: 10pt;">
+                <table border="1" style="border-collapse: collapse; text-align: center; width: 250px; font-size: 10pt;">
                     <tr>
                         <th colspan="2" style="padding: 5px; font-weight: bold;">버텍스아이디 박용욱 실장</th>
                     </tr>
