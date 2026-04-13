@@ -1,4 +1,17 @@
-# app.py 내의 함수 수정
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import imaplib
+import time
+import os
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.image import MIMEImage
+
+# --- 1. 플라스크 웹 서버 초기 세팅 ---
+app = Flask(__name__)
+CORS(app)
+
+# --- 2. 메일 작성 핵심 로직 ---
 def create_draft_logic(recipient, cc, subject):
     try:
         msg = MIMEMultipart('related')
@@ -46,8 +59,7 @@ def create_draft_logic(recipient, cc, subject):
         """
         msg.attach(MIMEText(html_body, 'html', 'utf-8'))
 
-        # --- 이미지 첨부 및 IMAP 접속 로직은 기존과 동일하게 유지 ---
-        # (아래는 기존 코드 그대로 두시면 됩니다)
+        # 이미지 첨부 로직
         current_dir = os.path.dirname(os.path.abspath(__file__))
         img_path = os.path.join(current_dir, "mail_sign.png")
         with open(img_path, "rb") as f:
@@ -55,6 +67,7 @@ def create_draft_logic(recipient, cc, subject):
             img.add_header('Content-ID', '<sig_img>')
             msg.attach(img)
 
+        # IMAP 서버 접속 및 저장
         imap = imaplib.IMAP4("mail.vertexid.com", 143)
         imap.login("pys@vertexid.com", "vertex1q2w3e!") 
         imap.append("DRAFTS", '', imaplib.Time2Internaldate(time.time()), msg.as_bytes())
@@ -63,7 +76,7 @@ def create_draft_logic(recipient, cc, subject):
     except Exception as e:
         return False, str(e)
 
-# API 창구도 변수를 받도록 수정
+# --- 3. 외부 API 수신 창구 ---
 @app.route('/make-draft', methods=['POST'])
 def make_draft_api():
     data = request.get_json()
@@ -79,3 +92,7 @@ def make_draft_api():
         return jsonify({"status": "success", "message": "작성 완료"}), 200
     else:
         return jsonify({"status": "error", "message": message}), 500
+
+# --- 4. 서버 실행 엔진 (이 부분이 있어야 Render가 켜집니다) ---
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
