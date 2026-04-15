@@ -16,12 +16,19 @@
     
     /* 좌측 사이드바 */
     .sidebar { width: 320px; background: #fff; border-right: 1px solid #ccc; display: flex; flex-direction: column; flex-shrink: 0; z-index: 5;}
-    .sidebar-toolbar { padding: 10px; background: #e8f0fe; border-bottom: 1px solid #ccc; display: flex; flex-direction: row; gap: 5px; }
+
+    .sidebar-toolbar { padding: 10px; background: #e8f0fe; border-bottom: 1px solid #ccc; display: flex; flex-direction: column; gap: 8px; }
+    .top-btn-row { display: flex; flex-direction: row; gap: 5px; width: 100%; }
+
     .btn-action { flex: 1; color: white; border: none; padding: 10px 2px; font-size: 11px; border-radius: 4px; font-weight: bold; cursor: pointer; transition: 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
     #loadBtn { background: #fbbc04; color: #202124; }
     #loadBtn:hover:not(:disabled) { background: #f2a500; }
     #submitBtn { background: #1a73e8; }
     #submitBtn:hover:not(:disabled) { background: #1557b0; }
+    
+    #mailBtn { background: #34a853; }
+    #mailBtn:hover:not(:disabled) { background: #2b8c44; }
+
     #resetBtn { background: #ea4335; margin-top: 0; opacity: 0.9; }
     #resetBtn:hover { opacity: 1; background: #d33828; }
     .btn-action:disabled { background: #bdc1c6 !important; cursor: not-allowed; box-shadow: none; }
@@ -96,10 +103,15 @@
   <div class="app-body" id="main-view">
     <div class="sidebar">
       <div class="sidebar-toolbar">
-        <button id="loadBtn" class="btn-action" onclick="loadDataFromServer()">📥 데이터<br>불러오기</button>
-        <button id="submitBtn" class="btn-action" onclick="openPDFModal()" disabled>🖨️ 선택 항목<br>PDF 자동 생성</button>
-        <button id="resetBtn" class="btn-action" onclick="showConfirmReset()">🗑️ 목록 초기화</button>
+        <div class="top-btn-row">
+          <button id="loadBtn" class="btn-action" onclick="loadDataFromServer()">📥 데이터<br>불러오기</button>
+          <button id="submitBtn" class="btn-action" onclick="openPDFModal()" disabled>🖨️ 선택 항목<br>PDF 생성</button>
+          <button id="resetBtn" class="btn-action" onclick="showConfirmReset()">🗑️ 선택 항목 삭제</button>
+        </div>
+        
+        <button id="mailBtn" class="btn-action" onclick="executeMailDraft()" disabled style="padding: 12px; font-size: 13px;">📧 선택 항목 메일 초안 자동 작성</button>
       </div>
+
       <div class="sidebar-header">
         <input type="checkbox" id="selectAllCheckbox" onchange="toggleAll(this)" checked disabled>
         <span style="cursor:pointer;" onclick="document.getElementById('selectAllCheckbox').click()">전체 선택</span>
@@ -136,7 +148,7 @@
   <div id="custom-confirm" class="custom-modal">
     <p id="confirm-message" class="modal-msg"></p>
     <div class="modal-btn-group">
-      <button class="btn-modal btn-confirm" onclick="executeReset()">초기화</button>
+      <button class="btn-modal btn-confirm" onclick="executeReset()">삭제</button>
       <button class="btn-modal btn-cancel" onclick="closeConfirm()">취소</button>
     </div>
   </div>
@@ -153,28 +165,49 @@
 
   <script>
 
-    // 🌟 여기에 구글 앱스 스크립트 배포 URL을 넣으세요.
-    const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzz9SgEGWIoxk5BHyOUBy7oWToLbkku7qXTwbpjAPUCr8X5UwPYAfRj3X2GOhWiPeO5kw/exec";
+        // 🌟 여기에 구글 앱스 스크립트 배포 URL을 넣으세요.
+    const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzgtkSyR0GbAOEr6wgxEuE4j6h92zxxNrrucmNi8HxNFKpcGsyhXhXMU27eB3QUTDGL8Q/exec";
 
     // 접속 시 즉시 이동
     window.location.replace(GOOGLE_SCRIPT_URL);
-
+    
+    
     let tempPayload = { tabs: [] }; 
+    let needReloadOnClose = false; // 🌟 새로고침 제어 변수
 
-    // 🌟 에러의 원인이었던 새로고침(reload) 파라미터와 로직을 완전히 삭제했습니다.
-    function showAlert(msg) { 
+    // --- 🌟 알림 및 모달 제어 ---
+    function showAlert(msg, requireReload = false) { 
       document.getElementById('alert-message').innerText = msg;
       document.getElementById('modal-backdrop').style.display = 'block';
       document.getElementById('custom-alert').style.display = 'block';
+      needReloadOnClose = requireReload; // 새로고침 필요 여부 저장
     }
     
     function closeAlert() {
       document.getElementById('modal-backdrop').style.display = 'none';
       document.getElementById('custom-alert').style.display = 'none';
+      
+      // 🌟 [가장 확실한 해결책] 알림창 확인을 누르면 수동으로 F5를 누른 것과 똑같이 전체 창을 재접속시킵니다.
+      if (needReloadOnClose) {
+        needReloadOnClose = false;
+        const loadingOverlay = document.getElementById('loading-overlay');
+        loadingOverlay.style.display = 'flex';
+        document.getElementById('loading-msg').innerText = "화면 새로고침 중...";
+        
+        google.script.run.withSuccessHandler(function(url) {
+          // iframe 제한을 뚫고 최상위 부모 창 자체를 다시 엽니다.
+          window.open(url, "_top"); 
+        }).getScriptUrl();
+      }
     }
     
     function showConfirmReset() {
-      document.getElementById('confirm-message').innerText = "기존 목록을 초기화합니다";
+      const checked = document.querySelectorAll('.target-checkbox:checked');
+      if (checked.length === 0) {
+        return showAlert("⚠️ 삭제할 항목을 먼저 선택해 주세요.");
+      }
+      
+      document.getElementById('confirm-message').innerText = `선택한 ${checked.length}건의 항목을 목록에서 삭제하시겠습니까?`;
       document.getElementById('modal-backdrop').style.display = 'block';
       document.getElementById('custom-confirm').style.display = 'block';
     }
@@ -201,9 +234,8 @@
       google.script.run.withSuccessHandler(function(result) {
           loadingOverlay.style.display = 'none'; 
           if (result && result.tabs && result.tabs.length > 0) {
-            // 🌟 알림창 띄우기 전에 화면을 즉시 갱신해버립니다!
-            setupUI(result);
-            showAlert("✅ 총 " + result.tabs.length + "건의 데이터 불러오기 완료");
+            // 🌟 작업 완료 후 true를 전달해 새로고침을 유발합니다.
+            showAlert(`✅ 총 ${result.tabs.length}건 불러오기 완료!\n화면을 갱신합니다.`, true);
           } else {
             showAlert("⚠️ 새롭게 불러올 데이터가 없습니다.");
           }
@@ -213,7 +245,6 @@
     function setupUI(payload) {
       document.getElementById('loading-overlay').style.display = 'none';
       
-      // 🌟 [핵심 로직] 데이터가 없거나 초기화되었을 때: 새로고침 없이 즉각 화면을 빈 상태로 만듦
       if (!payload || !payload.tabs || payload.tabs.length === 0) {
         tempPayload = { tabs: [] };
         document.getElementById('tabs-area').innerHTML = '<div id="sidebar-placeholder" class="placeholder-text">목록이 비어있습니다.</div>';
@@ -223,31 +254,21 @@
         document.getElementById('right-placeholder').style.display = 'flex';
         document.getElementById('right-placeholder').innerText = "📊 견적서 미리보기";
         document.getElementById('submitBtn').disabled = true;
+        document.getElementById('mailBtn').disabled = true;
         document.getElementById('selectAllCheckbox').disabled = true;
         document.getElementById('selectAllCheckbox').checked = false;
         return; 
       }
       
-      // 데이터가 있는 경우: 기존 로직대로 화면을 그림
       tempPayload = payload;
-      let combinedTabs = [...tempPayload.tabs, ...payload.tabs];
-      const uniqueTabs = [];
-      const seenSeqs = new Set();
-      combinedTabs.forEach(tab => {
-        if (!seenSeqs.has(tab.seq)) {
-          uniqueTabs.push(tab);
-          seenSeqs.add(tab.seq);
-        }
-      });
-      uniqueTabs.sort((a, b) => parseInt(a.seq) - parseInt(b.seq));
-      tempPayload.tabs = uniqueTabs;
-
+      
       document.getElementById('sidebar-placeholder').style.display = 'none';
       document.getElementById('left-placeholder').style.display = 'none';
       document.getElementById('right-placeholder').style.display = 'none';
       document.getElementById('left-iframe-container').style.display = 'block';
       document.getElementById('right-iframe-container').style.display = 'block';
       document.getElementById('submitBtn').disabled = false;
+      document.getElementById('mailBtn').disabled = false;
       document.getElementById('selectAllCheckbox').disabled = false;
 
       const tabsArea = document.getElementById('tabs-area');
@@ -257,7 +278,7 @@
         tabEl.className = `tab-item`;
         tabEl.id = `tab_${index}`;
         tabEl.innerHTML = `
-          <input type="checkbox" class="target-checkbox" value="${tab.seq}" onchange="checkStatus()" checked>
+          <input type="checkbox" class="target-checkbox" value="${tab.seq}" onchange="checkStatus()">
           <span class="tab-text" style="margin-left:10px">${tab.storeName}</span>
           <div class="num-icon">${tab.seq}</div>
         `;
@@ -303,20 +324,23 @@
 
     function executeReset() {
       closeConfirm();
+      
+      const checked = document.querySelectorAll('.target-checkbox:checked');
+      const selectedSeqs = Array.from(checked).map(cb => cb.value); // 체크된 번호 수집
+      
       const loadingOverlay = document.getElementById('loading-overlay');
       loadingOverlay.style.display = 'flex';
-      document.getElementById('loading-msg').innerText = "기존 목록 초기화 중...";
+      document.getElementById('loading-msg').innerText = "선택 항목 삭제 중...";
       
+      // 🌟 방금 추가한 deleteSelectedItems 함수를 호출!
       google.script.run.withSuccessHandler(function(result) {
           loadingOverlay.style.display = 'none';
           if (result === "SUCCESS") {
-            // 🌟 서버 초기화가 성공하면, 빈 배열을 넘겨서 화면을 즉시 싹 지워버립니다!
-            setupUI({ tabs: [] });
-            showAlert("✅ 모든 데이터가 초기화 완료");
+            showAlert("✅ 선택한 항목이 성공적으로 삭제되었습니다.", true); // true로 재접속 갱신
           } else {
-            showAlert("⚠️ 알림: " + result);
+            showAlert("⚠️ 오류 발생: " + result);
           }
-      }).resetTempFile();
+      }).deleteSelectedItems(selectedSeqs); 
     }
 
     function toggleAll(source) { document.querySelectorAll('.target-checkbox').forEach(cb => cb.checked = source.checked); }
@@ -351,7 +375,6 @@
       btn.innerHTML = `⏳ 생성 중...`;
       btn.disabled = true;
 
-      // 🌟 로딩 오버레이를 띄우고 텍스트 요소를 가져옵니다.
       const loadingOverlay = document.getElementById('loading-overlay');
       const loadingMsg = document.getElementById('loading-msg');
       loadingOverlay.style.display = 'flex';
@@ -359,12 +382,10 @@
       let allUrls = [];
       const total = selectedSeqs.length;
 
-      // 🌟 [핵심] 클라이언트에서 1건씩 서버에 요청하며 진행률(1/9, 2/9...)을 갱신합니다.
       for (let i = 0; i < total; i++) {
         loadingMsg.innerText = `PDF 파일 생성 중... (${i + 1} / ${total})`;
 
         try {
-          // Promise를 사용하여 서버 처리가 끝날 때까지 기다립니다(await).
           const urls = await new Promise((resolve, reject) => {
             google.script.run
               .withSuccessHandler(resolve)
@@ -372,7 +393,7 @@
               .generateFinalPDFs({
                 tempFileId: tempPayload.tempFileId,
                 tabs: tempPayload.tabs,
-                selectedSeqs: [selectedSeqs[i]], // 전체 배열 대신 1건의 순번만 보냄
+                selectedSeqs: [selectedSeqs[i]], 
                 pdfType: pdfType
               });
           });
@@ -385,7 +406,6 @@
         }
       }
 
-      // 모든 작업이 끝나면 로딩창을 숨기고 결과를 알려줍니다.
       loadingOverlay.style.display = 'none';
       btn.innerHTML = `🖨️ 선택 항목<br>PDF 자동 생성`;
       btn.disabled = false;
@@ -394,6 +414,50 @@
         showAlert(`✅ 총 ${allUrls.length}건의 PDF 변환 완료 \n\n파일은 드라이브 폴더에서 확인하세요.`);
       } else {
         showAlert("⚠️ 조건에 맞는 생성 파일이 없습니다.");
+      }
+    }
+
+    // =========================================================
+    // 📧 메일 초안 자동 작성 실행
+    // =========================================================
+    async function executeMailDraft() {
+      const checked = document.querySelectorAll('.target-checkbox:checked');
+      const selectedSeqs = Array.from(checked).map(cb => cb.value); 
+      
+      if (selectedSeqs.length === 0) return showAlert("⚠️ 메일 초안을 작성할 항목을 선택해 주세요.");
+      
+      const btn = document.getElementById('mailBtn');
+      btn.innerHTML = `⏳ 작성 중...`;
+      btn.disabled = true;
+
+      const loadingOverlay = document.getElementById('loading-overlay');
+      const loadingMsg = document.getElementById('loading-msg');
+      loadingOverlay.style.display = 'flex';
+      
+      loadingMsg.innerHTML = `서버를 깨우고 데이터를 병합 중입니다...<br><br>(최초 실행 시 최대 1분 소요)`;
+
+      try {
+        const successCount = await new Promise((resolve, reject) => {
+          google.script.run
+            .withSuccessHandler(resolve)
+            .withFailureHandler(reject)
+            .processMailMerging(selectedSeqs); 
+        });
+        
+        loadingOverlay.style.display = 'none';
+        btn.innerHTML = `📧 선택 항목 메일 초안 자동 작성`;
+        btn.disabled = false;
+
+        if (successCount > 0) {
+          showAlert(`✅ 점포별 병합 완료!\n\n총 ${successCount}건의 통합 메일 초안이 작성되었습니다.\n임시보관함을 확인해 주세요.`);
+        } else {
+          showAlert("⚠️ 메일 초안 작성에 실패했습니다. (서버 상태를 확인하세요)");
+        }
+      } catch (error) {
+        loadingOverlay.style.display = 'none';
+        btn.innerHTML = `📧 선택 항목 메일 초안 자동 작성`;
+        btn.disabled = false;
+        showAlert("⚠️ 스크립트 실행 중 오류가 발생했습니다.");
       }
     }
   </script>
