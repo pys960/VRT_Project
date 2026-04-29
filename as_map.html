@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>K7, GRS A/S 장애내역 지도</title>
+    
+    <!-- 네이버 지도 API & Geocoder 서브모듈 포함 -->
+    <script type="text/javascript" src="https://openapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=enxsrn2016&submodules=geocoder"></script>
+    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://npmcdn.com/flatpickr/dist/l10n/ko.js"></script>
+
+    <style>
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; font-family: 'Pretendard', sans-serif; position: fixed; top: 0; left: 0; right: 0; bottom: 0; overscroll-behavior: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+        input { -webkit-user-select: auto; user-select: auto; }
+        
+        #map { width: 100%; height: 100vh; background-color: #eee; }
+        
+        /* 검색창 UI 스타일 복구 */
+        #search-container { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); z-index: 2000; width: 92%; max-width: 450px; }
+        #search-box { display: flex; gap: 6px; width: 100%; }
+        .input-wrapper { position: relative; flex: 1; display: flex; align-items: center; }
+        #address-input { width: 100%; padding: 12px 15px; border-radius: 10px; border: 1px solid #ddd; box-shadow: 0 4px 12px rgba(0,0,0,0.15); outline: none; font-size: 14px; }
+        #clear-btn { position: absolute; right: 10px; cursor: pointer; display: none; width: 22px; height: 22px; background: #bbb; color: white; border-radius: 50%; text-align: center; line-height: 20px; font-size: 16px; border: none; }
+        #search-btn { padding: 10px 18px; background: #03C75A; color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; font-size: 14px; }
+        
+        /* 검색 자동완성 리스트 스타일 */
+        #autocomplete-list { background: white; border-radius: 10px; margin-top: 5px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); max-height: 350px; overflow-y: auto; display: none; border: 1px solid #ddd; }
+        .suggestion-item { padding: 12px 15px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 13px; display: flex; align-items: center; gap: 8px; line-height: 1.4; }
+        .suggestion-item:hover { background-color: #f4f4f4; }
+        .type-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: bold; color: white; flex-shrink: 0; }
+        .badge-geo { background: #03C75A; }
+
+        #count-bar { position: absolute; bottom: 25px; left: 50%; transform: translateX(-50%); z-index: 1500; background: rgba(33, 33, 33, 0.9); color: white; padding: 8px 20px; border-radius: 30px; font-size: 11px; font-weight: bold; box-shadow: 0 4px 15px rgba(0,0,0,0.3); pointer-events: none; }
+        
+        #controls {
+            position: absolute; top: 80px; right: 0px; z-index: 3000;
+            background: white; padding: clamp(8px, 2.5vw, 15px); border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15); border: 1px solid #ddd;
+            display: flex; flex-direction: column; gap: 8px; 
+            width: clamp(140px, 30vw, 180px); transition: transform 0.3s ease-in-out;
+            max-height: calc(100dvh - 130px); overflow: visible; 
+        }
+        #controls.collapsed { transform: translateX(calc(100%)); }
+        
+        #toggle-btn { position: absolute; left: -30px; top: 300px; transform: translateY(-50%); width: 30px; height: 80px; background: white; border: 1px solid #ddd; border-right: none; border-radius: 10px 0 0 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: -4px 0 8px rgba(0,0,0,0.1); font-weight: bold; color: #666; }
+
+        .control-section-title { font-size: 13px; font-weight: bold; color: #999; margin-bottom: 2px; }
+        .control-item { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+        
+        #date-picker { width: 100%; padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 11px; font-family: inherit; cursor: pointer; background: #fafafa; }
+        #record-count-display { font-size: 11px; font-weight: bold; color: #d32f2f; text-align: center; margin-top: -3px; }
+
+        .marker-label { position: absolute; top: 28px; left: 50%; transform: translateX(-45%); background: white; padding: 2px 8px; border: 1px solid #666; border-radius: 12px; font-size: 11px; font-weight: bold; color: #333; white-space: nowrap; box-shadow: 1px 1px 3px rgba(0,0,0,0.2); }
+        
+        .info-box { padding: 12px 15px; width: 300px; line-height: 1.6; background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); box-sizing: border-box; max-height: 350px; overflow-y: auto; }
+        .info-header { border-bottom: 2px solid #eee; padding-bottom: 8px; margin-bottom: 10px; }
+        .info-title { font-size: 14px; font-weight: bold; display: flex; align-items: center; gap: 5px; }
+        .record-card { background: #f8f9fa; border-radius: 8px; padding: 10px; margin-bottom: 10px; border-left: 4px solid #03C75A; }
+        .info-item { font-size: 12px; color: #444; margin-bottom: 4px; display: flex; align-items: flex-start; }
+        .info-label { font-weight: bold; color: #666; width: 60px; flex-shrink: 0; display: flex; justify-content: space-between; margin-right: 8px; }
+        .info-data { padding-left: 5px; word-break: break-all; white-space: normal; flex: 1; }
+        .note-highlight { color: #d32f2f; font-weight: bold; }
+        .time-badge { font-size: 11px; font-weight: 800; color: #1b5e20; margin-bottom: 4px; display: block; border-bottom: 1px dashed #ccc; padding-bottom: 4px;}
+
+        #map.hide-labels .marker-label { opacity: 0 !important; }
+    </style>
+</head>
+<body>
+
+    <!-- 검색창 추가 -->
+    <div id="search-container">
+        <div id="search-box">
+            <div class="input-wrapper">
+                <input type="text" id="address-input" placeholder="행정구역, 점포명, 코드 검색" autocomplete="off">
+                <button id="clear-btn">&times;</button>
+            </div>
+            <button id="search-btn">검색</button>
+        </div>
+        <div id="autocomplete-list"></div>
+    </div>
+
+    <div id="count-bar">데이터 로딩 중...</div>
+
+    <div id="controls">
+        <div id="toggle-btn"> ❮ </div>
+        
+        <div class="control-section-title">🏢 고객사 필터</div>
+        <div class="control-item"><input type="checkbox" id="chk-k7" checked data-client="k7"><span class="dot" style="background:#f57c00"></span><label for="chk-k7">세븐일레븐</label></div>
+        <div class="control-item"><input type="checkbox" id="chk-ria" checked data-client="ria"><span class="dot" style="background:#d32f2f"></span><label for="chk-ria">롯데리아</label></div>
+        <div class="control-item"><input type="checkbox" id="chk-angel" checked data-client="angel"><span class="dot" style="background:#795548"></span><label for="chk-angel">엔제리너스</label></div>
+        <div class="control-item"><input type="checkbox" id="chk-kkd" checked data-client="kkd"><span class="dot" style="background:#2e7d32"></span><label for="chk-kkd">KKD</label></div>
+        <div class="control-item"><input type="checkbox" id="chk-con" checked data-client="con"><span class="dot" style="background:#1976d2"></span><label for="chk-con">컨세션</label></div>
+        
+        <hr style="border:0; border-top:1px solid #eee; margin:10px 0;">
+
+        <div class="control-section-title">📅 날짜 필터</div>
+        <div class="control-item"><input type="text" id="date-picker" placeholder="날짜 선택"></div>
+        <div id="record-count-display">해당 기간 내 장애내역 0건 조회</div>
+
+        <hr style="border:0; border-top:1px solid #eee; margin:10px 0;">
+        
+        <div class="control-section-title">⏰ 시간대 필터</div>
+        <div class="control-item"><input type="checkbox" id="chk-day" checked><label for="chk-day">주간(08:01~17:00)</label></div>
+        <div class="control-item"><input type="checkbox" id="chk-night" checked><label for="chk-night">야간(17:01~24:00)</label></div>
+        <div class="control-item"><input type="checkbox" id="chk-late" checked><label for="chk-late">심야(24:01~08:00)</label></div>
+
+        <hr style="border:0; border-top:1px solid #eee; margin:10px 0;">
+
+        <div class="control-section-title">보기 설정</div>
+        <div class="control-item"><input type="checkbox" id="showLabels" checked><label for="showLabels">🏷️ 점포명 표시</label></div>
+    </div>
+
+    <div id="map"></div>
+
+    <script>
+        const CONFIG = {
+            SHEET_ID: '1lLt9pPq_BwVz8ITeJpTCDAzOILvo0wZ795aJcQ4hT_w', 
+            CLIENTS: [
+                { id: 'k7', name: '세븐일레븐', color: '#f57c00', icon: './icon/세븐일레븐.png', width: 25, height: 25 },
+                { id: 'ria', name: '롯데리아', color: '#d32f2f', icon: './icon/롯데리아.png', width: 31, height: 21 },
+                { id: 'angel', name: '엔제리너스', color: '#795548', icon: './icon/엔젤리너스.png', width: 37, height: 37 },
+                { id: 'kkd', name: '크리스피', color: '#2e7d32', icon: './icon/KKD.png', width: 65, height: 30 },
+                { id: 'con', name: '컨세션', color: '#1976d2', icon: './icon/컨세션.png', width: 30, height: 30 }
+            ],
+            RANGE: 'A2:J4500'
+        };
+
+        let naverMap, activeInfoWindow = null;
+        let masterStoreData = new Map(); 
+        let allMarkers = []; 
+        let flatpickrInst;
+        let isSearchMode = false; // 검색 모드 상태 변수
+
+        // 날짜 파싱 함수
+        function parseDateTime(val) {
+            if (!val || val === "-") return { datePart: "-", timePart: "-", totalMins: -1 };
+            let rawDateStr = val;
+            const match = val.match(/Date\((\d+),(\d+),(\d+)(?:,(\d+))?(?:,(\d+))?(?:,(\d+))?\)/);
+            if (match) {
+                const yy = match[1];
+                const mm = String(Number(match[2]) + 1).padStart(2, '0');
+                const dd = String(match[3]).padStart(2, '0');
+                const h = match[4] ? String(match[4]).padStart(2, '0') : '00';
+                const m = match[5] ? String(match[5]).padStart(2, '0') : '00';
+                rawDateStr = `${yy}-${mm}-${dd} ${h}:${m}`;
+            }
+            const parts = rawDateStr.split(' ');
+            const datePart = parts[0] || "-";
+            const timePart = parts[1] || "-";
+            let totalMins = -1;
+            if (timePart !== "-") {
+                const [hh, mm] = timePart.split(':').map(Number);
+                totalMins = (hh * 60) + mm;
+            }
+            return { datePart, timePart, totalMins, rawDateStr };
+        }
+
+        // 검색 시 핵심 행정구역 추출 함수
+        function getCoreUnit(fullText) {
+            const words = fullText.split(' ');
+            return words.reverse().find(w => w.endsWith('구') || w.endsWith('시') || w.endsWith('군') || w.endsWith('동')) || fullText;
+        }
+
+        async function initMap() {
+            naverMap = new naver.maps.Map('map', { center: new naver.maps.LatLng(37.5665, 126.9780), zoom: 12, zoomControl: false });
+            
+            naver.maps.Event.addListener(naverMap, 'click', () => {
+                if (activeInfoWindow) { activeInfoWindow.close(); activeInfoWindow = null; }
+                document.getElementById('autocomplete-list').style.display = 'none'; // 여백 클릭시 검색리스트 닫기
+            });
+
+            flatpickrInst = flatpickr("#date-picker", { mode: "multiple", locale: "ko", dateFormat: "Y-m-d", onChange: updateFilters });
+
+            document.getElementById('toggle-btn').onclick = () => document.getElementById('controls').classList.toggle('collapsed');
+            document.querySelectorAll('#controls input[type="checkbox"]').forEach(el => el.onchange = updateFilters);
+
+            // 검색 UI 이벤트 바인딩
+            const input = document.getElementById('address-input');
+            const list = document.getElementById('autocomplete-list');
+            const clearBtn = document.getElementById('clear-btn');
+
+            input.oninput = () => {
+                const q = input.value.trim().toLowerCase();
+                clearBtn.style.display = q ? 'block' : 'none';
+                if (q.length < 1) { list.style.display = 'none'; return; }
+
+                naver.maps.Service.geocode({ query: q }, (status, response) => {
+                    let html = "";
+                    // 1. 행정구역 결과 처리
+                    if (status === naver.maps.Service.Status.OK && response.v2.addresses.length) {
+                        response.v2.addresses.slice(0, 2).forEach(addr => {
+                            const name = addr.jibunAddress || addr.roadAddress;
+                            const core = getCoreUnit(name);
+                            html += `<div class="suggestion-item" onclick="handleSelectGeo('${core}', ${addr.y}, ${addr.x})"><span class="type-badge badge-geo">지역</span> ${name}</div>`;
+                        });
+                    }
+
+                    // 2. 점포 마스터 데이터 내부 검색 (점포명, 코드, 주소)
+                    const matchedStores = Array.from(masterStoreData.values()).filter(s => 
+                        (s.name && s.name.toLowerCase().includes(q)) ||
+                        (s.code && s.code.toLowerCase().includes(q)) ||
+                        (s.addr && s.addr.toLowerCase().includes(q))
+                    ).slice(0, 15); // 최대 15개 표시
+
+                    matchedStores.forEach(s => {
+                        html += `<div class="suggestion-item" onclick="handleSelectStore('${s.code}')"><span class="type-badge" style="background:${s.clientObj.color}">점포</span> [${s.code}] ${s.name}</div>`;
+                    });
+
+                    list.innerHTML = html;
+                    list.style.display = html ? 'block' : 'none';
+                });
+            };
+
+            clearBtn.onclick = () => { input.value = ''; isSearchMode = false; list.style.display = 'none'; clearBtn.style.display = 'none'; updateFilters(); };
+            document.getElementById('search-btn').onclick = () => { isSearchMode = true; list.style.display = 'none'; updateFilters(); };
+
+            const url = `https://docs.google.com/spreadsheets/d/${CONFIG.SHEET_ID}/gviz/tq?tqx=out:json&range=${CONFIG.RANGE}`;
+            try {
+                const response = await fetch(url);
+                const text = await response.text();
+                const rows = JSON.parse(text.substring(47).slice(0, -2)).table.rows;
+
+                // 겹치는 좌표를 분산하기 위한 추적기(Tracker) 객체
+                const coordTracker = {};
+
+                rows.forEach(row => {
+                    if (!row || !row.c) return;
+                    const gv = (idx) => (row.c[idx] && row.c[idx].v !== null) ? String(row.c[idx].v).trim() : "-";
+                    
+                    const reqNo = gv(0); const clientName = gv(1); const code = gv(2); 
+                    const name = gv(3); const addr = gv(4);
+                    let lat = parseFloat(row.c[8]?.v); 
+                    let lng = parseFloat(row.c[9]?.v); 
+
+                    if (name === "-" || isNaN(lat) || isNaN(lng)) return;
+
+                    // 🌟 중복 좌표 분산 로직 (Offset) 🌟
+                    // 좌표를 소수점 5자리(약 1m 해상도) 기준으로 문자열 키를 만듭니다.
+                    const coordKey = `${lat.toFixed(5)},${lng.toFixed(5)}`;
+                    
+                    if (coordTracker[coordKey]) {
+                        const duplicateCount = coordTracker[coordKey];
+                        // 약 10~15미터 정도의 거리를 띄우기 위해 반경(Radius) 설정
+                        const radius = 0.00015; 
+                        // 중복된 개수만큼 각도를 틀어주어 동그랗게 겹치지 않게 퍼뜨립니다.
+                        const angle = duplicateCount * (Math.PI / 4); // 45도씩 회전
+                        
+                        lat += radius * Math.sin(angle);
+                        lng += radius * Math.cos(angle);
+                        
+                        coordTracker[coordKey]++; // 해당 위치의 중복 카운트 증가
+                    } else {
+                        coordTracker[coordKey] = 1; // 처음 발견된 좌표
+                    }
+
+                    const dt = parseDateTime(gv(5));
+                    let timeSlot = '';
+                    if (dt.totalMins >= 481 && dt.totalMins <= 1020) timeSlot = 'day'; 
+                    else if (dt.totalMins >= 1021 || dt.totalMins === 0) timeSlot = 'night'; 
+                    else if (dt.totalMins > 0 && dt.totalMins <= 480) timeSlot = 'late'; 
+
+                    if (!masterStoreData.has(code)) {
+                        const clientObj = CONFIG.CLIENTS.find(c => clientName.includes(c.name)) || CONFIG.CLIENTS[0];
+                        masterStoreData.set(code, { code, name, addr, lat, lng, clientObj, records: [] });
+                    }
+                    masterStoreData.get(code).records.push({ reqNo, datePart: dt.datePart, timePart: dt.timePart, rawDateStr: dt.rawDateStr, model: gv(6), symptom: gv(7), timeSlot });
+                });
+
+                masterStoreData.forEach((store, code) => {
+                    let markerContent = "";
+                    let markerAnchor = null;
+
+                    if (store.clientObj.id === 'con') {
+                        const conSize = 30;
+                        markerContent = `<div class="marker-container" style="position:relative; display:flex; flex-direction:column; align-items:center;"><svg width="${conSize}" height="${conSize}" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22C12 22 19 14.25 19 9C19 5.13 15.87 2 12 2Z" fill="${store.clientObj.color}" stroke="white" stroke-width="1.5"/><circle cx="12" cy="9" r="3" fill="white"/></svg><div class="marker-label" style="border-color:${store.clientObj.color}; top: 100%; margin-top: 2px;">${store.name}</div></div>`;
+                        markerAnchor = new naver.maps.Point(conSize / 2, conSize);
+                    } else {
+                        const iconStyle = `width: ${store.clientObj.width}px; height: ${store.clientObj.height}px; object-fit: contain; vertical-align: bottom;`;
+                        markerContent = `<div class="marker-container" style="position:relative; display:flex; flex-direction:column; align-items:center;"><img src="${store.clientObj.icon}" style="${iconStyle}" alt="${store.name}"><div class="marker-label" style="border-color:${store.clientObj.color}; top: 100%; margin-top: 2px;">${store.name}</div></div>`;
+                        markerAnchor = new naver.maps.Point(store.clientObj.width / 2, store.clientObj.height + 2);
+                    }
+                    
+                    const marker = new naver.maps.Marker({ 
+                        position: new naver.maps.LatLng(store.lat, store.lng), 
+                        icon: { content: markerContent, anchor: markerAnchor } 
+                    });
+                    
+                    marker.set('storeData', store); 
+
+                    naver.maps.Event.addListener(marker, "click", () => {
+                        const sData = marker.get('storeData');
+                        if (activeInfoWindow && activeInfoWindow.storeCode === sData.code) {
+                            activeInfoWindow.close(); activeInfoWindow = null; return;
+                        }
+                        if (activeInfoWindow) activeInfoWindow.close();
+
+                        const recordsHtml = sData.validRecords.map(r => `<div class="record-card"><span class="time-badge">🗓️ ${r.datePart} &nbsp; ⏰ ${r.timePart}</span><div class="info-item"><span class="info-label"><span>접</span><span>수</span><span>번</span><span>호</span></span> <span class="info-data">${r.reqNo}</span></div><div class="info-item"><span class="info-label"><span>모</span><span>델</span><span>명</span></span> <span class="info-data">${r.model}</span></div><div class="info-item"><span class="info-label"><span>장</span><span>애</span><span>현</span><span>상</span></span> <span class="info-data note-highlight">${r.symptom}</span></div></div>`).join('');
+                        const infoHtml = `<div class="info-box"><div class="info-header"><div class="info-title" style="color:${sData.clientObj.color}"><span style="font-size:11px; opacity:0.6;">${sData.code}</span> ${sData.name}</div></div>${recordsHtml}</div>`;
+                        
+                        activeInfoWindow = new naver.maps.InfoWindow({ borderWidth: 0, backgroundColor: "transparent", disableAnchor: true }); 
+                        activeInfoWindow.setContent(infoHtml); 
+                        activeInfoWindow.storeCode = sData.code; 
+                        activeInfoWindow.open(naverMap, marker);
+                    });
+                    
+                    allMarkers.push(marker);
+                });
+
+                updateFilters();
+
+            } catch (err) {
+                console.error("데이터 로딩 실패:", err);
+            }
+        }
+
+        // 글로벌 검색 연동 함수
+        window.handleSelectGeo = (coreName, lat, lng) => {
+            const input = document.getElementById('address-input');
+            input.value = coreName;
+            document.getElementById('autocomplete-list').style.display = 'none';
+            isSearchMode = true;
+            naverMap.setCenter(new naver.maps.LatLng(lat, lng));
+            naverMap.setZoom(14);
+            updateFilters();
+        };
+
+        window.handleSelectStore = (code) => {
+            const targetStore = masterStoreData.get(code);
+            if (targetStore) {
+                document.getElementById('address-input').value = targetStore.name;
+                document.getElementById('autocomplete-list').style.display = 'none';
+                isSearchMode = true;
+
+                // 고객사 필터가 꺼져있다면 강제로 켜주기
+                const clientChk = document.querySelector(`input[data-client="${targetStore.clientObj.id}"]`);
+                if (clientChk && !clientChk.checked) clientChk.checked = true;
+
+                updateFilters();
+
+                naverMap.setCenter(new naver.maps.LatLng(targetStore.lat, targetStore.lng));
+                naverMap.setZoom(17);
+
+                // 마커를 찾아서 강제로 클릭 이벤트 발생시켜 정보창 열기
+                const marker = allMarkers.find(m => m.get('storeData').code === code);
+                if (marker) {
+                    naver.maps.Event.trigger(marker, 'click');
+                }
+            }
+        };
+
+        function updateFilters() {
+            if (activeInfoWindow) { activeInfoWindow.close(); activeInfoWindow = null; }
+            
+            const activeClients = Array.from(document.querySelectorAll('input[data-client]:checked')).map(el => el.dataset.client);
+            const selectedDates = flatpickrInst.selectedDates.map(d => flatpickr.formatDate(d, "Y-m-d"));
+            const showDay = document.getElementById('chk-day').checked;
+            const showNight = document.getElementById('chk-night').checked;
+            const showLate = document.getElementById('chk-late').checked;
+            
+            // 검색 모드일 때 검색어 추출
+            let searchQuery = "";
+            if (isSearchMode) {
+                searchQuery = document.getElementById('address-input').value.toLowerCase();
+            }
+
+            let visibleStoreCount = 0; 
+            let totalRecordsVisible = 0;
+
+            allMarkers.forEach(marker => {
+                const store = marker.get('storeData');
+                
+                if (!activeClients.includes(store.clientObj.id)) {
+                    marker.setMap(null); return;
+                }
+
+                // 검색어 매칭 확인
+                let matchSearch = true;
+                if (isSearchMode && searchQuery !== "") {
+                    matchSearch = store.name.toLowerCase().includes(searchQuery) || 
+                                  store.code.toLowerCase().includes(searchQuery) || 
+                                  store.addr.toLowerCase().includes(searchQuery);
+                }
+
+                if (!matchSearch) {
+                    marker.setMap(null); return;
+                }
+
+                store.validRecords = store.records.filter(r => {
+                    const dateMatch = selectedDates.length === 0 || selectedDates.includes(r.datePart);
+                    let timeMatch = false;
+                    if (r.timeSlot === 'day' && showDay) timeMatch = true;
+                    if (r.timeSlot === 'night' && showNight) timeMatch = true;
+                    if (r.timeSlot === 'late' && showLate) timeMatch = true;
+                    return dateMatch && timeMatch;
+                });
+
+                if (store.validRecords.length > 0) {
+                    store.validRecords.sort((a, b) => new Date(a.rawDateStr) - new Date(b.rawDateStr));
+                    marker.setMap(naverMap); 
+                    visibleStoreCount++;
+                    totalRecordsVisible += store.validRecords.length;
+                } else {
+                    marker.setMap(null); 
+                }
+            });
+
+            document.getElementById('count-bar').innerText = `현재 조건에 맞는 점포 ${visibleStoreCount}개 표시 중`;
+            document.getElementById('record-count-display').innerText = `해당 기간 내 장애내역 ${totalRecordsVisible}건 조회`;
+            
+            const mapEl = document.getElementById('map');
+            if (document.getElementById('showLabels').checked) {
+                mapEl.classList.remove('hide-labels');
+            } else {
+                mapEl.classList.add('hide-labels');
+            }
+        }
+        
+        window.onload = initMap;
+    </script>
+</body>
+</html>
