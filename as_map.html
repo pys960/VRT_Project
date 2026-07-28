@@ -218,11 +218,44 @@
             clearBtn.onclick = () => { input.value = ''; isSearchMode = false; list.style.display = 'none'; clearBtn.style.display = 'none'; updateFilters(); };
             document.getElementById('search-btn').onclick = () => { isSearchMode = true; list.style.display = 'none'; updateFilters(); };
 
-            const url = `https://docs.google.com/spreadsheets/d/${CONFIG.SHEET_ID}/gviz/tq?tqx=out:json&range=${CONFIG.RANGE}`;
             try {
-                const response = await fetch(url);
-                const text = await response.text();
-                const rows = JSON.parse(text.substring(47).slice(0, -2)).table.rows;
+                const baseUrl =
+                    `https://docs.google.com/spreadsheets/d/${CONFIG.SHEET_ID}/gviz/tq?tqx=out:json`;
+            
+                const existingUrl =
+                    `${baseUrl}&range=${encodeURIComponent(CONFIG.RANGE)}`;
+            
+                const tossUrl =
+                    `${baseUrl}&sheet=${encodeURIComponent('토스페이')}` +
+                    `&range=${encodeURIComponent('A2:J')}`;
+            
+                // 기존 시트와 토스페이 시트를 동시에 불러옵니다.
+                const [existingResponse, tossResponse] = await Promise.all([
+                    fetch(existingUrl),
+                    fetch(tossUrl)
+                ]);
+            
+                if (!existingResponse.ok) {
+                    throw new Error(`기존 시트 불러오기 실패: ${existingResponse.status}`);
+                }
+            
+                if (!tossResponse.ok) {
+                    throw new Error(`토스페이 시트 불러오기 실패: ${tossResponse.status}`);
+                }
+            
+                const [existingText, tossText] = await Promise.all([
+                    existingResponse.text(),
+                    tossResponse.text()
+                ]);
+            
+                const parseGvizResponse = text => {
+                    const jsonText = text.substring(47).slice(0, -2);
+                    const parsed = JSON.parse(jsonText);
+                    return parsed.table.rows || [];
+                };
+            
+                const rows = parseGvizResponse(existingText);
+                const tossRows = parseGvizResponse(tossText);
 
                 // 겹치는 좌표를 분산하기 위한 추적기(Tracker) 객체
                 const coordTracker = {};
@@ -265,11 +298,99 @@
 
                     if (!masterStoreData.has(code)) {
                         const clientObj = CONFIG.CLIENTS.find(c => clientName.includes(c.name)) || CONFIG.CLIENTS[0];
-                        masterStoreData.set(code, { code, name, addr, lat, lng, clientObj, records: [] });
+                        masterStoreData.set(code, { code, name, addr, lat, lng, clientObj, dataType: 'fault', records: [] });
                     }
                     masterStoreData.get(code).records.push({ reqNo, datePart: dt.datePart, timePart: dt.timePart, rawDateStr: dt.rawDateStr, model: gv(6), symptom: gv(7), timeSlot });
                 });
-
+                // 토스페이 고객사 정보
+                const tossClientObj = CONFIG.CLIENTS.find(client => client.id === 'toss');
+                
+                if (!tossClientObj) {
+                    throw new Error('CONFIG.CLIENTS에 토스페이 고객사가 등록되어 있지 않습니다.');
+                }
+                
+                // 토스페이 시트 데이터 처리
+                tossRows.forEach(row => {
+                    if (!row || !row.c) return;
+                
+                    // 실제 값
+                    const gv = idx => {
+                        const cell = row.c[idx];
+                
+                        return cell && cell.v !== null && cell.v !== undefined
+                            ? String(cell.v).trim()
+                            : '-';
+                    };
+                
+                    // 스프레드시트에 표시되는 서식 값
+                    const gf = idx => {
+                        const cell = row.c[idx];
+                
+                        if (!cell) return '-';
+                
+                        if (cell.f !== null && cell.f !== undefined) {
+                            return String(cell.f).trim();
+                        }
+                
+                        return gv(idx);
+                    };
+                
+                    const code = gv(0);             // A열: 점포코드
+                    const name = gv(1);             // B열: 점포명
+                    const addr = gv(2);             // C열: 주소
+                    const installDateRaw = gv(3);   // D열: 설치 예정일 원본
+                    const installDate = gf(3);      // D열: 표시용 설치 예정일
+                    const postalCode = gf(4);       // E열: 우편번호
+                
+                    let lat = parseFloat(row.c[5]?.v); // F열: 위도
+                    let lng = parseFloat(row.c[6]?.v); // G열: 경도
+                
+                    const business = gf(7);         // H열: 사업자
+                    const ip = gf(8);               // I열: IP
+                    const note = gf(9);             // J열: 비고
+                
+                    // 점포코드, 점포명, 위도, 경도가 없으면 지도에 표시하지 않음
+                    if (
+                        code === '-' ||
+                        name === '-' ||
+                        isNaN(lat) ||
+                        isNaN(lng)
+                    ) {
+                        return;
+                    }
+                
+                    const parsedInstallDate = parseDateTime(installDateRaw);
+                
+                    /*
+                     * 기존 고객사의 점포코드와 토스페이 점포코드가 우연히 같아도
+                     * 데이터가 합쳐지지 않도록 내부 키에 toss: 접두사를 붙입니다.
+                     */
+                    const storeKey = `toss:${code}`;
+                
+                    masterStoreData.set(storeKey, {
+                        storeKey,
+                        code,
+                        name,
+                        addr,
+                        lat,
+                        lng,
+                        clientObj: tossClientObj,
+                        dataType: 'toss',
+                
+                        records: [
+                            {
+                                datePart: parsedInstallDate.datePart,
+                                rawDateStr: parsedInstallDate.rawDateStr,
+                                installDate,
+                                postalCode,
+                                business,
+                                ip,
+                                note
+                            }
+                        ]
+                    });
+                });
+                
                 masterStoreData.forEach((store, code) => {
                     let markerContent = "";
                     let markerAnchor = null;
@@ -298,7 +419,75 @@
                         }
                         if (activeInfoWindow) activeInfoWindow.close();
 
-                        const recordsHtml = sData.validRecords.map(r => `<div class="record-card"><span class="time-badge">🗓️ ${r.datePart} &nbsp; ⏰ ${r.timePart}</span><div class="info-item"><span class="info-label"><span>접</span><span>수</span><span>번</span><span>호</span></span> <span class="info-data">${r.reqNo}</span></div><div class="info-item"><span class="info-label"><span>모</span><span>델</span><span>명</span></span> <span class="info-data">${r.model}</span></div><div class="info-item"><span class="info-label"><span>장</span><span>애</span><span>현</span><span>상</span></span> <span class="info-data note-highlight">${r.symptom}</span></div></div>`).join('');
+                        let recordsHtml = '';
+
+                        if (sData.dataType === 'toss') {
+                            const r = sData.records[0];
+                        
+                            recordsHtml = `
+                                <div class="record-card"
+                                     style="border-left-color:${sData.clientObj.color}">
+                        
+                                    <span class="time-badge">
+                                        🗓️ 설치 예정일: ${r.installDate}
+                                    </span>
+                        
+                                    <div class="info-item">
+                                        <span class="info-label">주소</span>
+                                        <span class="info-data">${sData.addr}</span>
+                                    </div>
+                        
+                                    <div class="info-item">
+                                        <span class="info-label">우편번호</span>
+                                        <span class="info-data">${r.postalCode}</span>
+                                    </div>
+                        
+                                    <div class="info-item">
+                                        <span class="info-label">사업자</span>
+                                        <span class="info-data">${r.business}</span>
+                                    </div>
+                        
+                                    <div class="info-item">
+                                        <span class="info-label">IP</span>
+                                        <span class="info-data">${r.ip}</span>
+                                    </div>
+                        
+                                    <div class="info-item">
+                                        <span class="info-label">비고</span>
+                                        <span class="info-data note-highlight">${r.note}</span>
+                                    </div>
+                                </div>
+                            `;
+                        } else {
+                            recordsHtml = sData.validRecords.map(r => `
+                                <div class="record-card">
+                                    <span class="time-badge">
+                                        🗓️ ${r.datePart} &nbsp; ⏰ ${r.timePart}
+                                    </span>
+                        
+                                    <div class="info-item">
+                                        <span class="info-label">
+                                            <span>접</span><span>수</span><span>번</span><span>호</span>
+                                        </span>
+                                        <span class="info-data">${r.reqNo}</span>
+                                    </div>
+                        
+                                    <div class="info-item">
+                                        <span class="info-label">
+                                            <span>모</span><span>델</span><span>명</span>
+                                        </span>
+                                        <span class="info-data">${r.model}</span>
+                                    </div>
+                        
+                                    <div class="info-item">
+                                        <span class="info-label">
+                                            <span>장</span><span>애</span><span>현</span><span>상</span>
+                                        </span>
+                                        <span class="info-data note-highlight">${r.symptom}</span>
+                                    </div>
+                                </div>
+                            `).join('');
+                        }
                         const infoHtml = `<div class="info-box"><div class="info-header"><div class="info-title" style="color:${sData.clientObj.color}"><span style="font-size:11px; opacity:0.6;">${sData.code}</span> ${sData.name}</div></div>${recordsHtml}</div>`;
                         
                         activeInfoWindow = new naver.maps.InfoWindow({ borderWidth: 0, backgroundColor: "transparent", disableAnchor: true }); 
@@ -389,24 +578,33 @@
                     marker.setMap(null); return;
                 }
 
-                store.validRecords = store.records.filter(r => {
-                    const dateMatch = selectedDates.length === 0 || selectedDates.includes(r.datePart);
-                    let timeMatch = false;
-                    if (r.timeSlot === 'day' && showDay) timeMatch = true;
-                    if (r.timeSlot === 'night' && showNight) timeMatch = true;
-                    if (r.timeSlot === 'late' && showLate) timeMatch = true;
-                    return dateMatch && timeMatch;
-                });
-
-                if (store.validRecords.length > 0) {
-                    store.validRecords.sort((a, b) => new Date(a.rawDateStr) - new Date(b.rawDateStr));
-                    marker.setMap(naverMap); 
-                    visibleStoreCount++;
-                    totalRecordsVisible += store.validRecords.length;
+                if (store.dataType === 'toss') {
+                    /*
+                     * 토스페이는 접수시간이 없으므로 시간대 필터를 적용하지 않습니다.
+                     * 날짜 필터는 설치 예정일을 기준으로 적용합니다.
+                     */
+                    store.validRecords = store.records.filter(r => {
+                        return (
+                            selectedDates.length === 0 ||
+                            selectedDates.includes(r.datePart)
+                        );
+                    });
                 } else {
-                    marker.setMap(null); 
+                    // 기존 장애내역 고객사
+                    store.validRecords = store.records.filter(r => {
+                        const dateMatch =
+                            selectedDates.length === 0 ||
+                            selectedDates.includes(r.datePart);
+                
+                        let timeMatch = false;
+                
+                        if (r.timeSlot === 'day' && showDay) timeMatch = true;
+                        if (r.timeSlot === 'night' && showNight) timeMatch = true;
+                        if (r.timeSlot === 'late' && showLate) timeMatch = true;
+                
+                        return dateMatch && timeMatch;
+                    });
                 }
-            });
 
             document.getElementById('count-bar').innerText = `현재 조건에 맞는 점포 ${visibleStoreCount}개 표시 중`;
             document.getElementById('record-count-display').innerText = `해당 기간 내 장애내역 ${totalRecordsVisible}건 조회`;
