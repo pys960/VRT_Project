@@ -94,6 +94,7 @@
         <div class="control-item"><input type="checkbox" id="chk-angel" checked data-client="angel"><span class="dot" style="background:#795548"></span><label for="chk-angel">엔제리너스</label></div>
         <div class="control-item"><input type="checkbox" id="chk-kkd" checked data-client="kkd"><span class="dot" style="background:#2e7d32"></span><label for="chk-kkd">KKD</label></div>
         <div class="control-item"><input type="checkbox" id="chk-con" checked data-client="con"><span class="dot" style="background:#1976d2"></span><label for="chk-con">컨세션</label></div>
+        <div class="control-item"><input type="checkbox" id="chk-toss" checked data-client="toss"><span class="dot" style="background:#0064FF"></span><label for="chk-toss">토스페이</label></div>
         
         <hr style="border:0; border-top:1px solid #eee; margin:10px 0;">
 
@@ -124,7 +125,8 @@
                 { id: 'ria', name: '롯데리아', color: '#d32f2f', icon: './icon/롯데리아.png', width: 31, height: 21 },
                 { id: 'angel', name: '엔제리너스', color: '#795548', icon: './icon/엔젤리너스.png', width: 37, height: 37 },
                 { id: 'kkd', name: '크리스피', color: '#2e7d32', icon: './icon/KKD.png', width: 65, height: 30 },
-                { id: 'con', name: '컨세션', color: '#1976d2', icon: './icon/컨세션.png', width: 30, height: 30 }
+                { id: 'con', name: '컨세션', color: '#1976d2', icon: './icon/컨세션.png', width: 30, height: 30 },
+                { id: 'toss', name: '토스페이', color: '#0064FF', icon: '', width: 30, height: 30 }
             ],
             RANGE: 'A2:J4500'
         };
@@ -207,7 +209,7 @@
                     ).slice(0, 15); // 최대 15개 표시
 
                     matchedStores.forEach(s => {
-                        html += `<div class="suggestion-item" onclick="handleSelectStore('${s.code}')"><span class="type-badge" style="background:${s.clientObj.color}">점포</span> [${s.code}] ${s.name}</div>`;
+                        html += `<div class="suggestion-item" onclick="handleSelectStore('${s.storeKey || s.code}')"><span class="type-badge" style="background:${s.clientObj.color}">점포</span> [${s.code}] ${s.name}</div>`;
                     });
 
                     list.innerHTML = html;
@@ -298,7 +300,7 @@
 
                     if (!masterStoreData.has(code)) {
                         const clientObj = CONFIG.CLIENTS.find(c => clientName.includes(c.name)) || CONFIG.CLIENTS[0];
-                        masterStoreData.set(code, { code, name, addr, lat, lng, clientObj, dataType: 'fault', records: [] });
+                        masterStoreData.set(code, { storeKey: code, code, name, addr, lat, lng, clientObj, dataType: 'fault', records: [] });
                     }
                     masterStoreData.get(code).records.push({ reqNo, datePart: dt.datePart, timePart: dt.timePart, rawDateStr: dt.rawDateStr, model: gv(6), symptom: gv(7), timeSlot });
                 });
@@ -395,10 +397,10 @@
                     let markerContent = "";
                     let markerAnchor = null;
 
-                    if (store.clientObj.id === 'con') {
-                        const conSize = 30;
-                        markerContent = `<div class="marker-container" style="position:relative; display:flex; flex-direction:column; align-items:center;"><svg width="${conSize}" height="${conSize}" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22C12 22 19 14.25 19 9C19 5.13 15.87 2 12 2Z" fill="${store.clientObj.color}" stroke="white" stroke-width="1.5"/><circle cx="12" cy="9" r="3" fill="white"/></svg><div class="marker-label" style="border-color:${store.clientObj.color}; top: 100%; margin-top: 2px;">${store.name}</div></div>`;
-                        markerAnchor = new naver.maps.Point(conSize / 2, conSize);
+                    if (store.clientObj.id === 'con' || store.clientObj.id === 'toss') {
+                        const pinSize = 30;
+                        markerContent = `<div class="marker-container" style="position:relative; display:flex; flex-direction:column; align-items:center;"><svg width="${pinSize}" height="${pinSize}" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22C12 22 19 14.25 19 9C19 5.13 15.87 2 12 2Z" fill="${store.clientObj.color}" stroke="white" stroke-width="1.5"/><circle cx="12" cy="9" r="3" fill="white"/></svg><div class="marker-label" style="border-color:${store.clientObj.color}; top: 100%; margin-top: 2px;">${store.name}</div></div>`;
+                        markerAnchor = new naver.maps.Point(pinSize / 2, pinSize);
                     } else {
                         const iconStyle = `width: ${store.clientObj.width}px; height: ${store.clientObj.height}px; object-fit: contain; vertical-align: bottom;`;
                         markerContent = `<div class="marker-container" style="position:relative; display:flex; flex-direction:column; align-items:center;"><img src="${store.clientObj.icon}" style="${iconStyle}" alt="${store.name}"><div class="marker-label" style="border-color:${store.clientObj.color}; top: 100%; margin-top: 2px;">${store.name}</div></div>`;
@@ -414,7 +416,7 @@
 
                     naver.maps.Event.addListener(marker, "click", () => {
                         const sData = marker.get('storeData');
-                        if (activeInfoWindow && activeInfoWindow.storeCode === sData.code) {
+                        if (activeInfoWindow && activeInfoWindow.storeKey === sData.storeKey) {
                             activeInfoWindow.close(); activeInfoWindow = null; return;
                         }
                         if (activeInfoWindow) activeInfoWindow.close();
@@ -492,7 +494,7 @@
                         
                         activeInfoWindow = new naver.maps.InfoWindow({ borderWidth: 0, backgroundColor: "transparent", disableAnchor: true }); 
                         activeInfoWindow.setContent(infoHtml); 
-                        activeInfoWindow.storeCode = sData.code; 
+                        activeInfoWindow.storeKey = sData.storeKey; 
                         activeInfoWindow.open(naverMap, marker);
                     });
                     
@@ -517,8 +519,8 @@
             updateFilters();
         };
 
-        window.handleSelectStore = (code) => {
-            const targetStore = masterStoreData.get(code);
+        window.handleSelectStore = (storeKey) => {
+            const targetStore = masterStoreData.get(storeKey);
             if (targetStore) {
                 document.getElementById('address-input').value = targetStore.name;
                 document.getElementById('autocomplete-list').style.display = 'none';
@@ -534,7 +536,7 @@
                 naverMap.setZoom(17);
 
                 // 마커를 찾아서 강제로 클릭 이벤트 발생시켜 정보창 열기
-                const marker = allMarkers.find(m => m.get('storeData').code === code);
+                const marker = allMarkers.find(m => m.get('storeData').storeKey === storeKey);
                 if (marker) {
                     naver.maps.Event.trigger(marker, 'click');
                 }
@@ -605,6 +607,20 @@
                         return dateMatch && timeMatch;
                     });
                 }
+
+                if (store.validRecords.length > 0) {
+                    store.validRecords.sort((a, b) => new Date(a.rawDateStr) - new Date(b.rawDateStr));
+                    marker.setMap(naverMap);
+                    visibleStoreCount++;
+
+                    // 설치점포는 기존 장애내역 건수에 포함하지 않습니다.
+                    if (store.dataType !== 'toss') {
+                        totalRecordsVisible += store.validRecords.length;
+                    }
+                } else {
+                    marker.setMap(null);
+                }
+            });
 
             document.getElementById('count-bar').innerText = `현재 조건에 맞는 점포 ${visibleStoreCount}개 표시 중`;
             document.getElementById('record-count-display').innerText = `해당 기간 내 장애내역 ${totalRecordsVisible}건 조회`;
