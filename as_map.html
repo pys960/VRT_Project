@@ -4,79 +4,121 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>K7, GRS A/S 장애내역 지도</title>
-    
-    <!-- 네이버 지도 API & Geocoder 서브모듈 포함 -->
+
     <script type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=enxsrn2016&submodules=geocoder"></script>
-    
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="https://npmcdn.com/flatpickr/dist/l10n/ko.js"></script>
 
     <style>
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; font-family: 'Pretendard', sans-serif; position: fixed; top: 0; left: 0; right: 0; bottom: 0; overscroll-behavior: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+        :root { --panel-width: clamp(190px, 36vw, 235px); }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; font-family: 'Pretendard', sans-serif; position: fixed; inset: 0; overscroll-behavior: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
         input { -webkit-user-select: auto; user-select: auto; }
-        
         #map { width: 100%; height: 100vh; background-color: #eee; }
-        
-        /* 검색창 UI 스타일 복구 */
+
         #search-container { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); z-index: 2000; width: 92%; max-width: 450px; }
         #search-box { display: flex; gap: 6px; width: 100%; }
         .input-wrapper { position: relative; flex: 1; display: flex; align-items: center; }
         #address-input { width: 100%; padding: 12px 15px; border-radius: 10px; border: 1px solid #ddd; box-shadow: 0 4px 12px rgba(0,0,0,0.15); outline: none; font-size: 14px; }
         #clear-btn { position: absolute; right: 10px; cursor: pointer; display: none; width: 22px; height: 22px; background: #bbb; color: white; border-radius: 50%; text-align: center; line-height: 20px; font-size: 16px; border: none; }
         #search-btn { padding: 10px 18px; background: #03C75A; color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; font-size: 14px; }
-        
-        /* 검색 자동완성 리스트 스타일 */
         #autocomplete-list { background: white; border-radius: 10px; margin-top: 5px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); max-height: 350px; overflow-y: auto; display: none; border: 1px solid #ddd; }
         .suggestion-item { padding: 12px 15px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 13px; display: flex; align-items: center; gap: 8px; line-height: 1.4; }
         .suggestion-item:hover { background-color: #f4f4f4; }
         .type-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: bold; color: white; flex-shrink: 0; }
         .badge-geo { background: #03C75A; }
 
-        #count-bar { position: absolute; bottom: 25px; left: 50%; transform: translateX(-50%); z-index: 1500; background: rgba(33, 33, 33, 0.9); color: white; padding: 8px 20px; border-radius: 30px; font-size: 11px; font-weight: bold; box-shadow: 0 4px 15px rgba(0,0,0,0.3); pointer-events: none; }
-        
-        #controls {
-            position: absolute; top: 80px; right: 0px; z-index: 3000;
-            background: white; padding: clamp(8px, 2.5vw, 15px); border-radius: 12px;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.15); border: 1px solid #ddd;
-            display: flex; flex-direction: column; gap: 8px; 
-            width: clamp(140px, 30vw, 180px); transition: transform 0.3s ease-in-out;
-            max-height: calc(100dvh - 130px); overflow: visible; 
+        #count-bar { position: absolute; bottom: 25px; left: 50%; transform: translateX(-50%); z-index: 1500; background: rgba(33,33,33,.9); color: white; padding: 8px 20px; border-radius: 30px; font-size: 11px; font-weight: bold; box-shadow: 0 4px 15px rgba(0,0,0,.3); pointer-events: none; white-space: nowrap; }
+
+        #sheet-tabs { position: absolute; top: 80px; right: 0; z-index: 3100; display: flex; flex-direction: column; gap: 0; transition: right .3s ease-in-out; }
+        #sidebar-ui.open #sheet-tabs { right: var(--panel-width); }
+        .sheet-tab { min-width: 42px; min-height: 72px; padding: 7px 6px; border: 1px solid #d7d7d7; border-right: none; border-radius: 0; background: rgba(255,255,255,.96); color: #777; box-shadow: -3px 2px 8px rgba(0,0,0,.12); cursor: pointer; font: inherit; font-size: 11px; font-weight: 800; writing-mode: vertical-rl; letter-spacing: 1px; }
+        .sheet-tab:first-child { border-radius: 10px 0 0 0; }
+        .sheet-tab:last-child { margin-top: -1px; border-radius: 0 0 0 10px; }
+        .sheet-tab.active { color: #0064ff; border-color: #8eb8ff; background: #edf4ff; }
+
+        .sheet-panel { position: absolute; top: 80px; right: 0; z-index: 3000; box-sizing: border-box; width: var(--panel-width); max-height: calc(100dvh - 130px); overflow-y: auto; visibility: hidden; transform: translateX(calc(100% + 1px)); transition: transform .3s ease-in-out; background: white; padding: clamp(10px, 2.5vw, 15px); border-radius: 0; box-shadow: 0 2px 12px rgba(0,0,0,.15); border: 1px solid #ddd; }
+        #sidebar-ui .sheet-panel.active { visibility: visible; }
+        #sidebar-ui.open .sheet-panel.active { transform: translateX(0); }
+        .panel-heading { display: flex; align-items: center; gap: 7px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #eee; color: #333; font-size: 14px; font-weight: 800; }
+        .panel-heading input { margin: 0; }
+        .control-section-title { font-size: 13px; font-weight: bold; color: #888; margin: 3px 0 7px; }
+        .control-item { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; margin: 7px 0; }
+        .control-item input[type="checkbox"], .panel-heading input[type="checkbox"] { accent-color: #1677ff; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: 0 0 auto; }
+        .date-picker { box-sizing: border-box; width: 100%; height: 38px; padding: 0 12px; border: 1px solid #dce2ea; border-radius: 9px; background: #f8fafc; color: #334155; font-size: 11px; font-family: inherit; cursor: pointer; transition: border-color .18s, background-color .18s, box-shadow .18s; }
+        .date-picker:hover { border-color: #a8b5c5; background: #fff; }
+        .date-picker:focus { outline: none; border-color: #6d9eff; background: #fff; box-shadow: 0 0 0 3px rgba(22,119,255,.12); }
+
+        /* 사이드바와 같은 톤으로 정리한 Flatpickr 달력 */
+        .flatpickr-calendar { box-sizing: border-box; max-width: calc(100vw - 20px); padding: 8px; border: 1px solid #e2e8f0; border-radius: 14px; background: rgba(255,255,255,.98); box-shadow: 0 14px 35px rgba(15,23,42,.16), 0 3px 10px rgba(15,23,42,.08); font-family: 'Pretendard', sans-serif; overflow: hidden; }
+        .flatpickr-calendar.open { animation: calendar-rise .18s ease-out; }
+        .flatpickr-calendar.arrowTop::before { border-bottom-color: #e2e8f0; }
+        .flatpickr-calendar.arrowTop::after { border-bottom-color: #fff; }
+        .flatpickr-calendar.arrowBottom::before { border-top-color: #e2e8f0; }
+        .flatpickr-calendar.arrowBottom::after { border-top-color: #fff; }
+        .flatpickr-months { min-height: 42px; align-items: center; border-radius: 10px; background: #f8fafc; }
+        .flatpickr-months .flatpickr-month { height: 42px; color: #1e293b; fill: #64748b; }
+        .flatpickr-current-month { height: 42px; padding-top: 10px; font-size: 14px; font-weight: 800; }
+        .flatpickr-current-month .flatpickr-monthDropdown-months,
+        .flatpickr-current-month input.cur-year { border-radius: 7px; color: #1e293b; font-weight: 800; }
+        .flatpickr-current-month .flatpickr-monthDropdown-months:hover,
+        .flatpickr-current-month input.cur-year:hover { background: #edf3fb; }
+        .flatpickr-months .flatpickr-prev-month,
+        .flatpickr-months .flatpickr-next-month { top: 8px; height: 34px; padding: 9px 12px; border-radius: 8px; fill: #64748b; }
+        .flatpickr-months .flatpickr-prev-month:hover,
+        .flatpickr-months .flatpickr-next-month:hover { background: #eaf2ff; fill: #1677ff; }
+        .flatpickr-weekdays { margin-top: 7px; background: transparent; }
+        span.flatpickr-weekday { color: #94a3b8; font-size: 11px; font-weight: 800; }
+        .flatpickr-days { border: 0; }
+        .dayContainer { padding: 3px 1px 5px; }
+        .flatpickr-day { border-radius: 9px; color: #334155; font-size: 12px; font-weight: 600; line-height: 37px; }
+        .flatpickr-day:hover,
+        .flatpickr-day:focus { border-color: #dbe9ff; background: #edf4ff; color: #075dcc; }
+        .flatpickr-day.today { border-color: #8cb6ff; color: #075dcc; font-weight: 900; }
+        .flatpickr-day.today:hover { border-color: #6d9eff; background: #edf4ff; color: #075dcc; }
+        .flatpickr-day.selected,
+        .flatpickr-day.startRange,
+        .flatpickr-day.endRange,
+        .flatpickr-day.selected:hover,
+        .flatpickr-day.startRange:hover,
+        .flatpickr-day.endRange:hover { border-color: #1677ff; background: #1677ff; color: #fff; box-shadow: 0 4px 10px rgba(22,119,255,.24); }
+        .flatpickr-day.prevMonthDay,
+        .flatpickr-day.nextMonthDay { color: #c1c9d4; }
+        .flatpickr-day.flatpickr-disabled { color: #d8dee7; }
+        @keyframes calendar-rise {
+            from { transform: translateY(5px); }
+            to { transform: translateY(0); }
         }
-        #controls.collapsed { transform: translateX(calc(100%)); }
-        
-        #toggle-btn { position: absolute; left: -30px; top: 300px; transform: translateY(-50%); width: 30px; height: 80px; background: white; border: 1px solid #ddd; border-right: none; border-radius: 10px 0 0 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: -4px 0 8px rgba(0,0,0,0.1); font-weight: bold; color: #666; }
+        .record-count-display { font-size: 11px; font-weight: bold; color: #d32f2f; text-align: center; margin-top: 5px; line-height: 1.4; }
+        .sheet-status { display: none; margin: 8px 0; padding: 7px; border-radius: 6px; color: #b42318; background: #fff0ee; font-size: 11px; line-height: 1.45; }
+        .section-line { border: 0; border-top: 1px solid #eee; margin: 13px 0; }
 
-        .control-section-title { font-size: 13px; font-weight: bold; color: #999; margin-bottom: 2px; }
-        .control-item { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; }
-        .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-        
-        #date-picker { width: 100%; padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 11px; font-family: inherit; cursor: pointer; background: #fafafa; }
-        #record-count-display { font-size: 11px; font-weight: bold; color: #d32f2f; text-align: center; margin-top: -3px; }
-
-        .marker-label { position: absolute; top: 28px; left: 50%; transform: translateX(-45%); background: white; padding: 2px 8px; border: 1px solid #666; border-radius: 12px; font-size: 11px; font-weight: bold; color: #333; white-space: nowrap; box-shadow: 1px 1px 3px rgba(0,0,0,0.2); }
-        
-        .info-box { padding: 12px 15px; width: 300px; line-height: 1.6; background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); box-sizing: border-box; max-height: 350px; overflow-y: auto; }
+        .marker-label { position: absolute; top: 28px; left: 50%; transform: translateX(-45%); background: white; padding: 2px 8px; border: 1px solid #666; border-radius: 12px; font-size: 11px; font-weight: bold; color: #333; white-space: nowrap; box-shadow: 1px 1px 3px rgba(0,0,0,.2); }
+        .info-box { padding: 12px 15px; width: 320px; line-height: 1.6; background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,.15); box-sizing: border-box; max-height: 350px; overflow-y: auto; }
         .info-header { border-bottom: 2px solid #eee; padding-bottom: 8px; margin-bottom: 10px; }
         .info-title { font-size: 14px; font-weight: bold; display: flex; align-items: center; gap: 5px; }
         .record-card { background: #f8f9fa; border-radius: 8px; padding: 10px; margin-bottom: 10px; border-left: 4px solid #03C75A; }
-        .info-item { font-size: 12px; color: #444; margin-bottom: 4px; display: flex; align-items: flex-start; }
-        .info-label { font-weight: bold; color: #666; width: 60px; flex-shrink: 0; display: flex; justify-content: space-between; margin-right: 8px; }
+        .info-item { font-size: 12px; color: #444; margin-bottom: 5px; display: flex; align-items: flex-start; }
+        .info-label { font-weight: bold; color: #666; width: 90px; flex-shrink: 0; margin-right: 8px; word-break: keep-all; }
         .info-data { padding-left: 5px; word-break: break-all; white-space: normal; flex: 1; }
         .note-highlight { color: #d32f2f; font-weight: bold; }
-        .time-badge { font-size: 11px; font-weight: 800; color: #1b5e20; margin-bottom: 4px; display: block; border-bottom: 1px dashed #ccc; padding-bottom: 4px;}
+        .time-badge { font-size: 11px; font-weight: 800; color: #1b5e20; margin-bottom: 4px; display: block; border-bottom: 1px dashed #ccc; padding-bottom: 4px; }
+        #map.hide-fault-labels .marker-label-fault, #map.hide-toss-labels .marker-label-toss { opacity: 0 !important; }
 
-        #map.hide-labels .marker-label { opacity: 0 !important; }
+        @media (max-width: 520px) {
+            :root { --panel-width: min(66vw, 235px); }
+            .sheet-tab { min-height: 64px; }
+            .info-box { width: min(320px, 82vw); }
+        }
     </style>
 </head>
 <body>
-
-    <!-- 검색창 추가 -->
     <div id="search-container">
         <div id="search-box">
             <div class="input-wrapper">
                 <input type="text" id="address-input" placeholder="행정구역, 점포명, 코드 검색" autocomplete="off">
-                <button id="clear-btn">&times;</button>
+                <button id="clear-btn" aria-label="검색어 지우기">&times;</button>
             </div>
             <button id="search-btn">검색</button>
         </div>
@@ -85,41 +127,62 @@
 
     <div id="count-bar">데이터 로딩 중...</div>
 
-    <div id="controls">
-        <div id="toggle-btn"> ❮ </div>
-        
-        <div class="control-section-title">🏢 고객사 필터</div>
-        <div class="control-item"><input type="checkbox" id="chk-k7" checked data-client="k7"><span class="dot" style="background:#f57c00"></span><label for="chk-k7">세븐일레븐</label></div>
-        <div class="control-item"><input type="checkbox" id="chk-ria" checked data-client="ria"><span class="dot" style="background:#d32f2f"></span><label for="chk-ria">롯데리아</label></div>
-        <div class="control-item"><input type="checkbox" id="chk-angel" checked data-client="angel"><span class="dot" style="background:#795548"></span><label for="chk-angel">엔제리너스</label></div>
-        <div class="control-item"><input type="checkbox" id="chk-kkd" checked data-client="kkd"><span class="dot" style="background:#2e7d32"></span><label for="chk-kkd">KKD</label></div>
-        <div class="control-item"><input type="checkbox" id="chk-con" checked data-client="con"><span class="dot" style="background:#1976d2"></span><label for="chk-con">컨세션</label></div>
-        <div class="control-item"><input type="checkbox" id="chk-toss" checked data-client="toss"><span class="dot" style="background:#0064FF"></span><label for="chk-toss">토스페이</label></div>
-        
-        <hr style="border:0; border-top:1px solid #eee; margin:10px 0;">
+    <div id="sidebar-ui">
+        <div id="sheet-tabs">
+            <button class="sheet-tab" data-panel="fault" title="장애내역 옵션">장애내역</button>
+            <button class="sheet-tab active" data-panel="toss" title="토스페이 옵션">토스페이</button>
+        </div>
 
-        <div class="control-section-title">📅 날짜 필터</div>
-        <div class="control-item"><input type="text" id="date-picker" placeholder="날짜 선택"></div>
-        <div id="record-count-display">해당 기간 내 장애내역 0건 조회</div>
+        <section id="panel-fault" class="sheet-panel" aria-label="장애내역 시트 옵션">
+            <label class="panel-heading"><input type="checkbox" id="fault-sheet-enabled"> 🛠️ 장애내역 전체 표시</label>
+            <div id="fault-sheet-status" class="sheet-status"></div>
 
-        <hr style="border:0; border-top:1px solid #eee; margin:10px 0;">
-        
-        <div class="control-section-title">⏰ 시간대 필터</div>
-        <div class="control-item"><input type="checkbox" id="chk-day" checked><label for="chk-day">주간(08:01~17:00)</label></div>
-        <div class="control-item"><input type="checkbox" id="chk-night" checked><label for="chk-night">야간(17:01~24:00)</label></div>
-        <div class="control-item"><input type="checkbox" id="chk-late" checked><label for="chk-late">심야(24:01~08:00)</label></div>
+            <div class="control-section-title">🏢 고객사 필터</div>
+            <label class="control-item"><input type="checkbox" data-client="k7"><span class="dot" style="background:#f57c00"></span>세븐일레븐</label>
+            <label class="control-item"><input type="checkbox" data-client="ria"><span class="dot" style="background:#d32f2f"></span>롯데리아</label>
+            <label class="control-item"><input type="checkbox" data-client="angel"><span class="dot" style="background:#795548"></span>엔제리너스</label>
+            <label class="control-item"><input type="checkbox" data-client="kkd"><span class="dot" style="background:#2e7d32"></span>KKD</label>
+            <label class="control-item"><input type="checkbox" data-client="con"><span class="dot" style="background:#1976d2"></span>컨세션</label>
 
-        <hr style="border:0; border-top:1px solid #eee; margin:10px 0;">
+            <hr class="section-line">
+            <div class="control-section-title">📅 장애 날짜 필터</div>
+            <input type="text" id="fault-date-picker" class="date-picker" placeholder="날짜 선택">
+            <div id="fault-record-count" class="record-count-display">해당 기간 내 장애내역 0건 조회</div>
 
-        <div class="control-section-title">보기 설정</div>
-        <div class="control-item"><input type="checkbox" id="showLabels" checked><label for="showLabels">🏷️ 점포명 표시</label></div>
+            <hr class="section-line">
+            <div class="control-section-title">⏰ 시간대 필터</div>
+            <label class="control-item"><input type="checkbox" id="chk-day" checked>주간(08:01~17:00)</label>
+            <label class="control-item"><input type="checkbox" id="chk-night" checked>야간(17:01~24:00)</label>
+            <label class="control-item"><input type="checkbox" id="chk-late" checked>심야(24:01~08:00)</label>
+
+            <hr class="section-line">
+            <div class="control-section-title">보기 설정</div>
+            <label class="control-item"><input type="checkbox" id="show-fault-labels" checked>🏷️ 점포명 표시</label>
+        </section>
+
+        <section id="panel-toss" class="sheet-panel active" aria-label="토스페이 시트 옵션">
+            <label class="panel-heading"><input type="checkbox" id="toss-sheet-enabled" checked> 💳 토스페이 전체 표시</label>
+            <div id="toss-sheet-status" class="sheet-status"></div>
+
+            <div class="control-section-title">📅 설치 예정일 필터</div>
+            <input type="text" id="toss-date-picker" class="date-picker" placeholder="날짜 선택">
+            <div id="toss-store-count" class="record-count-display">설치점포 0개 조회</div>
+
+            <hr class="section-line">
+            <div class="control-section-title">보기 설정</div>
+            <label class="control-item"><input type="checkbox" id="show-toss-labels" checked>🏷️ 점포명 표시</label>
+        </section>
     </div>
 
     <div id="map"></div>
 
     <script>
         const CONFIG = {
-            SHEET_ID: '1lLt9pPq_BwVz8ITeJpTCDAzOILvo0wZ795aJcQ4hT_w', 
+            SHEET_ID: '1lLt9pPq_BwVz8ITeJpTCDAzOILvo0wZ795aJcQ4hT_w',
+            SHEETS: {
+                fault: { name: '장애내역', range: 'A2:J4500' },
+                toss: { name: '토스페이', headerRow: 1, dataStartRow: 2, lastColumn: 'Z' }
+            },
             CLIENTS: [
                 { id: 'k7', name: '세븐일레븐', color: '#f57c00', icon: './icon/세븐일레븐.png', width: 25, height: 25 },
                 { id: 'ria', name: '롯데리아', color: '#d32f2f', icon: './icon/롯데리아.png', width: 31, height: 21 },
@@ -128,20 +191,29 @@
                 { id: 'con', name: '컨세션', color: '#1976d2', icon: './icon/컨세션.png', width: 30, height: 30 },
                 { id: 'toss', name: '토스페이', color: '#0064FF', icon: '', width: 30, height: 30 }
             ],
-            RANGE: 'A2:J4500'
+            TOSS_HEADER_ALIASES: {
+                code: ['점포코드', '매장코드', '가맹점코드', '코드', 'storecode'],
+                name: ['점포명', '매장명', '가맹점명', '상호명', 'storename'],
+                address: ['주소', '점포주소', '매장주소', 'address'],
+                installDate: ['설치예정일', '설치일', '설치예정일자', '예정일', 'installdate'],
+                lat: ['위도', 'latitude', 'lat', 'y좌표', 'ycoordinate'],
+                lng: ['경도', 'longitude', 'lng', 'lon', 'x좌표', 'xcoordinate']
+            }
         };
 
-        let naverMap, activeInfoWindow = null;
-        let masterStoreData = new Map(); 
-        let allMarkers = []; 
-        let flatpickrInst;
-        let isSearchMode = false; // 검색 모드 상태 변수
+        let naverMap;
+        let activeInfoWindow = null;
+        let masterStoreData = new Map();
+        let allMarkers = [];
+        let faultDatePicker;
+        let tossDatePicker;
+        let isSearchMode = false;
+        let activePanelId = 'toss';
 
-        // 날짜 파싱 함수
         function parseDateTime(val) {
-            if (!val || val === "-") return { datePart: "-", timePart: "-", totalMins: -1 };
-            let rawDateStr = val;
-            const match = val.match(/Date\((\d+),(\d+),(\d+)(?:,(\d+))?(?:,(\d+))?(?:,(\d+))?\)/);
+            if (!val || val === '-') return { datePart: '-', timePart: '-', totalMins: -1, rawDateStr: '-' };
+            let rawDateStr = String(val);
+            const match = rawDateStr.match(/Date\((\d+),(\d+),(\d+)(?:,(\d+))?(?:,(\d+))?(?:,(\d+))?\)/);
             if (match) {
                 const yy = match[1];
                 const mm = String(Number(match[2]) + 1).padStart(2, '0');
@@ -151,367 +223,398 @@
                 rawDateStr = `${yy}-${mm}-${dd} ${h}:${m}`;
             }
             const parts = rawDateStr.split(' ');
-            const datePart = parts[0] || "-";
-            const timePart = parts[1] || "-";
+            const datePart = parts[0] || '-';
+            const timePart = parts[1] || '-';
             let totalMins = -1;
-            if (timePart !== "-") {
+            if (timePart !== '-') {
                 const [hh, mm] = timePart.split(':').map(Number);
-                totalMins = (hh * 60) + mm;
+                if (!Number.isNaN(hh) && !Number.isNaN(mm)) totalMins = (hh * 60) + mm;
             }
             return { datePart, timePart, totalMins, rawDateStr };
         }
 
-        // 검색 시 핵심 행정구역 추출 함수
         function getCoreUnit(fullText) {
             const words = fullText.split(' ');
-            return words.reverse().find(w => w.endsWith('구') || w.endsWith('시') || w.endsWith('군') || w.endsWith('동')) || fullText;
+            return words.reverse().find(word => word.endsWith('구') || word.endsWith('시') || word.endsWith('군') || word.endsWith('동')) || fullText;
         }
 
-        async function initMap() {
-            naverMap = new naver.maps.Map('map', { center: new naver.maps.LatLng(37.5665, 126.9780), zoom: 12, zoomControl: false });
-            
-            naver.maps.Event.addListener(naverMap, 'click', () => {
-                if (activeInfoWindow) { activeInfoWindow.close(); activeInfoWindow = null; }
-                document.getElementById('autocomplete-list').style.display = 'none'; // 여백 클릭시 검색리스트 닫기
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
+        }
+
+        function normalizeHeader(value) {
+            return String(value ?? '').toLowerCase().replace(/[\s_\-()[\]{}./]/g, '');
+        }
+
+        function findHeaderIndex(headers, aliases) {
+            const normalizedAliases = aliases.map(normalizeHeader);
+            return headers.findIndex(header => normalizedAliases.includes(normalizeHeader(header)));
+        }
+
+        function columnLetter(index) {
+            let value = index + 1;
+            let result = '';
+            while (value > 0) {
+                value--;
+                result = String.fromCharCode(65 + (value % 26)) + result;
+                value = Math.floor(value / 26);
+            }
+            return result;
+        }
+
+        function parseGvizResponse(text) {
+            const start = text.indexOf('{');
+            const end = text.lastIndexOf('}');
+            if (start < 0 || end < start) throw new Error('Google 시트 응답 형식이 올바르지 않습니다.');
+            const parsed = JSON.parse(text.slice(start, end + 1));
+            return {
+                cols: parsed.table?.cols || [],
+                rows: parsed.table?.rows || []
+            };
+        }
+
+        async function fetchGviz(url, label) {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`${label} 시트 불러오기 실패: ${response.status}`);
+            return parseGvizResponse(await response.text());
+        }
+
+        function setSheetStatus(sheetId, message) {
+            const element = document.getElementById(`${sheetId}-sheet-status`);
+            if (!element) return;
+            element.textContent = message || '';
+            element.style.display = message ? 'block' : 'none';
+        }
+
+        function getCellRaw(row, index) {
+            const cell = index >= 0 ? row.c?.[index] : null;
+            return cell && cell.v !== null && cell.v !== undefined ? String(cell.v).trim() : '-';
+        }
+
+        function getCellFormatted(row, index) {
+            const cell = index >= 0 ? row.c?.[index] : null;
+            if (!cell) return '-';
+            if (cell.f !== null && cell.f !== undefined) return String(cell.f).trim();
+            return getCellRaw(row, index);
+        }
+
+        function syncFaultSheetToggle() {
+            const children = Array.from(document.querySelectorAll('input[data-client]'));
+            const checkedCount = children.filter(input => input.checked).length;
+            const master = document.getElementById('fault-sheet-enabled');
+            master.checked = checkedCount === children.length;
+            master.indeterminate = checkedCount > 0 && checkedCount < children.length;
+        }
+
+        function bindSidebarEvents() {
+            const sidebar = document.getElementById('sidebar-ui');
+            document.querySelectorAll('.sheet-tab').forEach(button => {
+                button.addEventListener('click', () => {
+                    const selectedId = button.dataset.panel;
+                    const isSameOpenPanel = sidebar.classList.contains('open') && activePanelId === selectedId;
+                    if (isSameOpenPanel) {
+                        sidebar.classList.remove('open');
+                        return;
+                    }
+                    activePanelId = selectedId;
+                    sidebar.classList.add('open');
+                    document.querySelectorAll('.sheet-tab').forEach(tab => tab.classList.toggle('active', tab.dataset.panel === selectedId));
+                    document.querySelectorAll('.sheet-panel').forEach(panel => panel.classList.toggle('active', panel.id === `panel-${selectedId}`));
+                });
             });
 
-            flatpickrInst = flatpickr("#date-picker", { mode: "multiple", locale: "ko", dateFormat: "Y-m-d", onChange: updateFilters });
+            document.getElementById('fault-sheet-enabled').addEventListener('change', event => {
+                document.querySelectorAll('input[data-client]').forEach(input => { input.checked = event.target.checked; });
+                event.target.indeterminate = false;
+                updateFilters();
+            });
+            document.querySelectorAll('input[data-client]').forEach(input => input.addEventListener('change', () => {
+                syncFaultSheetToggle();
+                updateFilters();
+            }));
+            ['toss-sheet-enabled', 'chk-day', 'chk-night', 'chk-late', 'show-fault-labels', 'show-toss-labels'].forEach(id => {
+                document.getElementById(id).addEventListener('change', updateFilters);
+            });
+        }
 
-            document.getElementById('toggle-btn').onclick = () => document.getElementById('controls').classList.toggle('collapsed');
-            document.querySelectorAll('#controls input[type="checkbox"]').forEach(el => el.onchange = updateFilters);
-
-            // 검색 UI 이벤트 바인딩
+        function bindSearchEvents() {
             const input = document.getElementById('address-input');
             const list = document.getElementById('autocomplete-list');
-            const clearBtn = document.getElementById('clear-btn');
+            const clearButton = document.getElementById('clear-btn');
 
             input.oninput = () => {
-                const q = input.value.trim().toLowerCase();
-                clearBtn.style.display = q ? 'block' : 'none';
-                if (q.length < 1) { list.style.display = 'none'; return; }
+                const query = input.value.trim().toLowerCase();
+                clearButton.style.display = query ? 'block' : 'none';
+                if (!query) { list.style.display = 'none'; return; }
 
-                naver.maps.Service.geocode({ query: q }, (status, response) => {
-                    let html = "";
-                    // 1. 행정구역 결과 처리
+                naver.maps.Service.geocode({ query }, (status, response) => {
+                    let html = '';
                     if (status === naver.maps.Service.Status.OK && response.v2.addresses.length) {
-                        response.v2.addresses.slice(0, 2).forEach(addr => {
-                            const name = addr.jibunAddress || addr.roadAddress;
+                        response.v2.addresses.slice(0, 2).forEach(address => {
+                            const name = address.jibunAddress || address.roadAddress;
                             const core = getCoreUnit(name);
-                            html += `<div class="suggestion-item" onclick="handleSelectGeo('${core}', ${addr.y}, ${addr.x})"><span class="type-badge badge-geo">지역</span> ${name}</div>`;
+                            html += `<div class="suggestion-item" data-geo-core="${escapeHtml(core)}" data-lat="${address.y}" data-lng="${address.x}"><span class="type-badge badge-geo">지역</span>${escapeHtml(name)}</div>`;
                         });
                     }
 
-                    // 2. 점포 마스터 데이터 내부 검색 (점포명, 코드, 주소)
-                    const matchedStores = Array.from(masterStoreData.values()).filter(s => 
-                        (s.name && s.name.toLowerCase().includes(q)) ||
-                        (s.code && s.code.toLowerCase().includes(q)) ||
-                        (s.addr && s.addr.toLowerCase().includes(q))
-                    ).slice(0, 15); // 최대 15개 표시
-
-                    matchedStores.forEach(s => {
-                        html += `<div class="suggestion-item" onclick="handleSelectStore('${s.storeKey || s.code}')"><span class="type-badge" style="background:${s.clientObj.color}">점포</span> [${s.code}] ${s.name}</div>`;
+                    Array.from(masterStoreData.values()).filter(store =>
+                        store.name.toLowerCase().includes(query) ||
+                        store.code.toLowerCase().includes(query) ||
+                        store.addr.toLowerCase().includes(query)
+                    ).slice(0, 15).forEach(store => {
+                        html += `<div class="suggestion-item" data-store-key="${escapeHtml(store.storeKey)}"><span class="type-badge" style="background:${store.clientObj.color}">점포</span>[${escapeHtml(store.code)}] ${escapeHtml(store.name)}</div>`;
                     });
 
                     list.innerHTML = html;
                     list.style.display = html ? 'block' : 'none';
+                    list.querySelectorAll('[data-geo-core]').forEach(item => item.addEventListener('click', () => window.handleSelectGeo(item.dataset.geoCore, Number(item.dataset.lat), Number(item.dataset.lng))));
+                    list.querySelectorAll('[data-store-key]').forEach(item => item.addEventListener('click', () => window.handleSelectStore(item.dataset.storeKey)));
                 });
             };
 
-            clearBtn.onclick = () => { input.value = ''; isSearchMode = false; list.style.display = 'none'; clearBtn.style.display = 'none'; updateFilters(); };
-            document.getElementById('search-btn').onclick = () => { isSearchMode = true; list.style.display = 'none'; updateFilters(); };
-
-            try {
-                const baseUrl =
-                    `https://docs.google.com/spreadsheets/d/${CONFIG.SHEET_ID}/gviz/tq?tqx=out:json`;
-            
-                const existingUrl =
-                    `${baseUrl}&range=${encodeURIComponent(CONFIG.RANGE)}`;
-            
-                const tossUrl =
-                    `${baseUrl}&sheet=${encodeURIComponent('토스페이')}` +
-                    `&range=${encodeURIComponent('A2:J')}`;
-            
-                // 기존 시트와 토스페이 시트를 동시에 불러옵니다.
-                const [existingResponse, tossResponse] = await Promise.all([
-                    fetch(existingUrl),
-                    fetch(tossUrl)
-                ]);
-            
-                if (!existingResponse.ok) {
-                    throw new Error(`기존 시트 불러오기 실패: ${existingResponse.status}`);
-                }
-            
-                if (!tossResponse.ok) {
-                    throw new Error(`토스페이 시트 불러오기 실패: ${tossResponse.status}`);
-                }
-            
-                const [existingText, tossText] = await Promise.all([
-                    existingResponse.text(),
-                    tossResponse.text()
-                ]);
-            
-                const parseGvizResponse = text => {
-                    const jsonText = text.substring(47).slice(0, -2);
-                    const parsed = JSON.parse(jsonText);
-                    return parsed.table.rows || [];
-                };
-            
-                const rows = parseGvizResponse(existingText);
-                const tossRows = parseGvizResponse(tossText);
-
-                // 겹치는 좌표를 분산하기 위한 추적기(Tracker) 객체
-                const coordTracker = {};
-
-                rows.forEach(row => {
-                    if (!row || !row.c) return;
-                    const gv = (idx) => (row.c[idx] && row.c[idx].v !== null) ? String(row.c[idx].v).trim() : "-";
-                    
-                    const reqNo = gv(0); const clientName = gv(1); const code = gv(2); 
-                    const name = gv(3); const addr = gv(4);
-                    let lat = parseFloat(row.c[8]?.v); 
-                    let lng = parseFloat(row.c[9]?.v); 
-
-                    if (name === "-" || isNaN(lat) || isNaN(lng)) return;
-
-                    // 🌟 중복 좌표 분산 로직 (Offset) 🌟
-                    // 좌표를 소수점 5자리(약 1m 해상도) 기준으로 문자열 키를 만듭니다.
-                    const coordKey = `${lat.toFixed(5)},${lng.toFixed(5)}`;
-                    
-                    if (coordTracker[coordKey]) {
-                        const duplicateCount = coordTracker[coordKey];
-                        // 약 10~15미터 정도의 거리를 띄우기 위해 반경(Radius) 설정
-                        const radius = 0.00015; 
-                        // 중복된 개수만큼 각도를 틀어주어 동그랗게 겹치지 않게 퍼뜨립니다.
-                        const angle = duplicateCount * (Math.PI / 4); // 45도씩 회전
-                        
-                        lat += radius * Math.sin(angle);
-                        lng += radius * Math.cos(angle);
-                        
-                        coordTracker[coordKey]++; // 해당 위치의 중복 카운트 증가
-                    } else {
-                        coordTracker[coordKey] = 1; // 처음 발견된 좌표
-                    }
-
-                    const dt = parseDateTime(gv(5));
-                    let timeSlot = '';
-                    if (dt.totalMins >= 481 && dt.totalMins <= 1020) timeSlot = 'day'; 
-                    else if (dt.totalMins >= 1021 || dt.totalMins === 0) timeSlot = 'night'; 
-                    else if (dt.totalMins > 0 && dt.totalMins <= 480) timeSlot = 'late'; 
-
-                    if (!masterStoreData.has(code)) {
-                        const clientObj = CONFIG.CLIENTS.find(c => clientName.includes(c.name)) || CONFIG.CLIENTS[0];
-                        masterStoreData.set(code, { storeKey: code, code, name, addr, lat, lng, clientObj, dataType: 'fault', records: [] });
-                    }
-                    masterStoreData.get(code).records.push({ reqNo, datePart: dt.datePart, timePart: dt.timePart, rawDateStr: dt.rawDateStr, model: gv(6), symptom: gv(7), timeSlot });
-                });
-                // 토스페이 고객사 정보
-                const tossClientObj = CONFIG.CLIENTS.find(client => client.id === 'toss');
-                
-                if (!tossClientObj) {
-                    throw new Error('CONFIG.CLIENTS에 토스페이 고객사가 등록되어 있지 않습니다.');
-                }
-                
-                // 토스페이 시트 데이터 처리
-                tossRows.forEach(row => {
-                    if (!row || !row.c) return;
-                
-                    // 실제 값
-                    const gv = idx => {
-                        const cell = row.c[idx];
-                
-                        return cell && cell.v !== null && cell.v !== undefined
-                            ? String(cell.v).trim()
-                            : '-';
-                    };
-                
-                    // 스프레드시트에 표시되는 서식 값
-                    const gf = idx => {
-                        const cell = row.c[idx];
-                
-                        if (!cell) return '-';
-                
-                        if (cell.f !== null && cell.f !== undefined) {
-                            return String(cell.f).trim();
-                        }
-                
-                        return gv(idx);
-                    };
-                
-                    const code = gv(0);             // A열: 점포코드
-                    const name = gv(1);             // B열: 점포명
-                    const addr = gv(2);             // C열: 주소
-                    const installDateRaw = gv(3);   // D열: 설치 예정일 원본
-                    const installDate = gf(3);      // D열: 표시용 설치 예정일
-                    const postalCode = gf(4);       // E열: 우편번호
-                
-                    let lat = parseFloat(row.c[5]?.v); // F열: 위도
-                    let lng = parseFloat(row.c[6]?.v); // G열: 경도
-                
-                    const business = gf(7);         // H열: 사업자
-                    const ip = gf(8);               // I열: IP
-                    const note = gf(9);             // J열: 비고
-                
-                    // 점포코드, 점포명, 위도, 경도가 없으면 지도에 표시하지 않음
-                    if (
-                        code === '-' ||
-                        name === '-' ||
-                        isNaN(lat) ||
-                        isNaN(lng)
-                    ) {
-                        return;
-                    }
-                
-                    const parsedInstallDate = parseDateTime(installDateRaw);
-                
-                    /*
-                     * 기존 고객사의 점포코드와 토스페이 점포코드가 우연히 같아도
-                     * 데이터가 합쳐지지 않도록 내부 키에 toss: 접두사를 붙입니다.
-                     */
-                    const storeKey = `toss:${code}`;
-                
-                    masterStoreData.set(storeKey, {
-                        storeKey,
-                        code,
-                        name,
-                        addr,
-                        lat,
-                        lng,
-                        clientObj: tossClientObj,
-                        dataType: 'toss',
-                
-                        records: [
-                            {
-                                datePart: parsedInstallDate.datePart,
-                                rawDateStr: parsedInstallDate.rawDateStr,
-                                installDate,
-                                postalCode,
-                                business,
-                                ip,
-                                note
-                            }
-                        ]
-                    });
-                });
-                
-                masterStoreData.forEach((store, code) => {
-                    let markerContent = "";
-                    let markerAnchor = null;
-
-                    if (store.clientObj.id === 'con' || store.clientObj.id === 'toss') {
-                        const pinSize = 30;
-                        markerContent = `<div class="marker-container" style="position:relative; display:flex; flex-direction:column; align-items:center;"><svg width="${pinSize}" height="${pinSize}" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22C12 22 19 14.25 19 9C19 5.13 15.87 2 12 2Z" fill="${store.clientObj.color}" stroke="white" stroke-width="1.5"/><circle cx="12" cy="9" r="3" fill="white"/></svg><div class="marker-label" style="border-color:${store.clientObj.color}; top: 100%; margin-top: 2px;">${store.name}</div></div>`;
-                        markerAnchor = new naver.maps.Point(pinSize / 2, pinSize);
-                    } else {
-                        const iconStyle = `width: ${store.clientObj.width}px; height: ${store.clientObj.height}px; object-fit: contain; vertical-align: bottom;`;
-                        markerContent = `<div class="marker-container" style="position:relative; display:flex; flex-direction:column; align-items:center;"><img src="${store.clientObj.icon}" style="${iconStyle}" alt="${store.name}"><div class="marker-label" style="border-color:${store.clientObj.color}; top: 100%; margin-top: 2px;">${store.name}</div></div>`;
-                        markerAnchor = new naver.maps.Point(store.clientObj.width / 2, store.clientObj.height + 2);
-                    }
-                    
-                    const marker = new naver.maps.Marker({ 
-                        position: new naver.maps.LatLng(store.lat, store.lng), 
-                        icon: { content: markerContent, anchor: markerAnchor } 
-                    });
-                    
-                    marker.set('storeData', store); 
-
-                    naver.maps.Event.addListener(marker, "click", () => {
-                        const sData = marker.get('storeData');
-                        if (activeInfoWindow && activeInfoWindow.storeKey === sData.storeKey) {
-                            activeInfoWindow.close(); activeInfoWindow = null; return;
-                        }
-                        if (activeInfoWindow) activeInfoWindow.close();
-
-                        let recordsHtml = '';
-
-                        if (sData.dataType === 'toss') {
-                            const r = sData.records[0];
-                        
-                            recordsHtml = `
-                                <div class="record-card"
-                                     style="border-left-color:${sData.clientObj.color}">
-                        
-                                    <span class="time-badge">
-                                        🗓️ 설치 예정일: ${r.installDate}
-                                    </span>
-                        
-                                    <div class="info-item">
-                                        <span class="info-label">주소</span>
-                                        <span class="info-data">${sData.addr}</span>
-                                    </div>
-                        
-                                    <div class="info-item">
-                                        <span class="info-label">우편번호</span>
-                                        <span class="info-data">${r.postalCode}</span>
-                                    </div>
-                        
-                                    <div class="info-item">
-                                        <span class="info-label">사업자</span>
-                                        <span class="info-data">${r.business}</span>
-                                    </div>
-                        
-                                    <div class="info-item">
-                                        <span class="info-label">IP</span>
-                                        <span class="info-data">${r.ip}</span>
-                                    </div>
-                        
-                                    <div class="info-item">
-                                        <span class="info-label">비고</span>
-                                        <span class="info-data note-highlight">${r.note}</span>
-                                    </div>
-                                </div>
-                            `;
-                        } else {
-                            recordsHtml = sData.validRecords.map(r => `
-                                <div class="record-card">
-                                    <span class="time-badge">
-                                        🗓️ ${r.datePart} &nbsp; ⏰ ${r.timePart}
-                                    </span>
-                        
-                                    <div class="info-item">
-                                        <span class="info-label">
-                                            <span>접</span><span>수</span><span>번</span><span>호</span>
-                                        </span>
-                                        <span class="info-data">${r.reqNo}</span>
-                                    </div>
-                        
-                                    <div class="info-item">
-                                        <span class="info-label">
-                                            <span>모</span><span>델</span><span>명</span>
-                                        </span>
-                                        <span class="info-data">${r.model}</span>
-                                    </div>
-                        
-                                    <div class="info-item">
-                                        <span class="info-label">
-                                            <span>장</span><span>애</span><span>현</span><span>상</span>
-                                        </span>
-                                        <span class="info-data note-highlight">${r.symptom}</span>
-                                    </div>
-                                </div>
-                            `).join('');
-                        }
-                        const infoHtml = `<div class="info-box"><div class="info-header"><div class="info-title" style="color:${sData.clientObj.color}"><span style="font-size:11px; opacity:0.6;">${sData.code}</span> ${sData.name}</div></div>${recordsHtml}</div>`;
-                        
-                        activeInfoWindow = new naver.maps.InfoWindow({ borderWidth: 0, backgroundColor: "transparent", disableAnchor: true }); 
-                        activeInfoWindow.setContent(infoHtml); 
-                        activeInfoWindow.storeKey = sData.storeKey; 
-                        activeInfoWindow.open(naverMap, marker);
-                    });
-                    
-                    allMarkers.push(marker);
-                });
-
+            clearButton.onclick = () => {
+                input.value = '';
+                isSearchMode = false;
+                list.style.display = 'none';
+                clearButton.style.display = 'none';
                 updateFilters();
+            };
+            document.getElementById('search-btn').onclick = () => {
+                isSearchMode = true;
+                list.style.display = 'none';
+                updateFilters();
+            };
+        }
 
-            } catch (err) {
-                console.error("데이터 로딩 실패:", err);
+        function processFaultRows(rows, coordTracker) {
+            rows.forEach(row => {
+                if (!row?.c) return;
+                const gv = index => getCellRaw(row, index);
+                const reqNo = gv(0);
+                const clientName = gv(1);
+                const code = gv(2);
+                const name = gv(3);
+                const addr = gv(4);
+                let lat = parseFloat(row.c[8]?.v);
+                let lng = parseFloat(row.c[9]?.v);
+                if (name === '-' || Number.isNaN(lat) || Number.isNaN(lng)) return;
+
+                const coordKey = `${lat.toFixed(5)},${lng.toFixed(5)}`;
+                if (coordTracker[coordKey]) {
+                    const angle = coordTracker[coordKey] * (Math.PI / 4);
+                    lat += 0.00015 * Math.sin(angle);
+                    lng += 0.00015 * Math.cos(angle);
+                    coordTracker[coordKey]++;
+                } else {
+                    coordTracker[coordKey] = 1;
+                }
+
+                const dt = parseDateTime(gv(5));
+                let timeSlot = '';
+                if (dt.totalMins >= 481 && dt.totalMins <= 1020) timeSlot = 'day';
+                else if (dt.totalMins >= 1021 || dt.totalMins === 0) timeSlot = 'night';
+                else if (dt.totalMins > 0 && dt.totalMins <= 480) timeSlot = 'late';
+
+                if (!masterStoreData.has(code)) {
+                    const clientObj = CONFIG.CLIENTS.find(client => clientName.includes(client.name)) || CONFIG.CLIENTS[0];
+                    masterStoreData.set(code, { sheetId: 'fault', storeKey: code, code, name, addr, lat, lng, clientObj, dataType: 'fault', records: [] });
+                }
+                masterStoreData.get(code).records.push({ reqNo, datePart: dt.datePart, timePart: dt.timePart, rawDateStr: dt.rawDateStr, model: gv(6), symptom: gv(7), timeSlot });
+            });
+        }
+
+        function findTossHeaderRow(table) {
+            const aliases = CONFIG.TOSS_HEADER_ALIASES;
+            const columnCount = table.cols.length;
+            // 조회 범위가 실제 헤더 행에서 시작하므로 GViz 응답의 첫 행이 헤더입니다.
+            const rowIndex = 0;
+            const headerRow = table.rows[rowIndex];
+            if (!headerRow) return null;
+
+            const headers = Array.from(
+                { length: columnCount },
+                (_, columnIndex) => getCellFormatted(headerRow, columnIndex) === '-'
+                    ? ''
+                    : getCellFormatted(headerRow, columnIndex)
+            );
+            const hasRequiredHeaders =
+                findHeaderIndex(headers, aliases.code) >= 0 &&
+                findHeaderIndex(headers, aliases.name) >= 0 &&
+                findHeaderIndex(headers, aliases.lat) >= 0 &&
+                findHeaderIndex(headers, aliases.lng) >= 0;
+
+            return hasRequiredHeaders ? { rowIndex, headers } : null;
+        }
+
+        function processTossTable(table) {
+            const tossClientObj = CONFIG.CLIENTS.find(client => client.id === 'toss');
+            const detectedHeader = findTossHeaderRow(table);
+            if (!detectedHeader) {
+                setSheetStatus('toss', '점포코드·점포명·위도·경도가 있는 헤더 행을 찾을 수 없습니다.');
+                console.error('토스페이 시트 헤더 행 탐색 실패');
+                return;
+            }
+
+            const rawHeaders = detectedHeader.headers;
+            const aliases = CONFIG.TOSS_HEADER_ALIASES;
+            const schema = {
+                code: findHeaderIndex(rawHeaders, aliases.code),
+                name: findHeaderIndex(rawHeaders, aliases.name),
+                address: findHeaderIndex(rawHeaders, aliases.address),
+                installDate: findHeaderIndex(rawHeaders, aliases.installDate),
+                lat: findHeaderIndex(rawHeaders, aliases.lat),
+                lng: findHeaderIndex(rawHeaders, aliases.lng)
+            };
+
+            const firstCoordinateIndex = Math.min(schema.lat, schema.lng);
+            if (schema.installDate < 0) {
+                schema.installDate = table.cols.findIndex((column, index) =>
+                    index >= 2 && index < firstCoordinateIndex && column.type === 'date'
+                );
+            }
+
+            const headers = rawHeaders.map((header, index) => {
+                if (header) return header;
+                if (index === schema.installDate) return '설치 예정일';
+                return `${columnLetter(index)}열`;
+            });
+
+            let validCoordinateCount = 0;
+            const responseDataStartIndex = CONFIG.SHEETS.toss.dataStartRow - CONFIG.SHEETS.toss.headerRow;
+            table.rows.slice(responseDataStartIndex).forEach(row => {
+                if (!row?.c) return;
+                const code = getCellRaw(row, schema.code);
+                const name = getCellRaw(row, schema.name);
+                const addr = getCellFormatted(row, schema.address);
+                const lat = parseFloat(row.c[schema.lat]?.v);
+                const lng = parseFloat(row.c[schema.lng]?.v);
+                if (code === '-' || name === '-' || Number.isNaN(lat) || Number.isNaN(lng)) return;
+                validCoordinateCount++;
+
+                const detailFields = [];
+                for (let index = 2; index < firstCoordinateIndex; index++) {
+                    detailFields.push({ label: headers[index] || `${columnLetter(index)}열`, value: getCellFormatted(row, index) });
+                }
+
+                const installDateRaw = getCellRaw(row, schema.installDate);
+                const installDateParsed = parseDateTime(installDateRaw);
+                const storeKey = `toss:${code}`;
+                masterStoreData.set(storeKey, {
+                    sheetId: 'toss',
+                    storeKey,
+                    code,
+                    name,
+                    addr,
+                    lat,
+                    lng,
+                    clientObj: tossClientObj,
+                    dataType: 'toss',
+                    records: [{ datePart: installDateParsed.datePart, rawDateStr: installDateParsed.rawDateStr, detailFields }]
+                });
+            });
+
+            if (validCoordinateCount === 0) {
+                console.warn('토스페이 시트에 위도·경도가 모두 입력된 데이터 행이 없습니다.');
             }
         }
 
-        // 글로벌 검색 연동 함수
+        function createMarkers() {
+            masterStoreData.forEach(store => {
+                let markerContent;
+                let markerAnchor;
+                const labelClass = store.sheetId === 'toss' ? 'marker-label-toss' : 'marker-label-fault';
+                if (store.clientObj.id === 'con' || store.clientObj.id === 'toss') {
+                    const pinSize = 30;
+                    markerContent = `<div style="position:relative;display:flex;flex-direction:column;align-items:center"><svg width="${pinSize}" height="${pinSize}" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22C12 22 19 14.25 19 9C19 5.13 15.87 2 12 2Z" fill="${store.clientObj.color}" stroke="white" stroke-width="1.5"/><circle cx="12" cy="9" r="3" fill="white"/></svg><div class="marker-label ${labelClass}" style="border-color:${store.clientObj.color};top:100%;margin-top:2px">${escapeHtml(store.name)}</div></div>`;
+                    markerAnchor = new naver.maps.Point(pinSize / 2, pinSize);
+                } else {
+                    const style = `width:${store.clientObj.width}px;height:${store.clientObj.height}px;object-fit:contain;vertical-align:bottom`;
+                    markerContent = `<div style="position:relative;display:flex;flex-direction:column;align-items:center"><img src="${store.clientObj.icon}" style="${style}" alt="${escapeHtml(store.name)}"><div class="marker-label ${labelClass}" style="border-color:${store.clientObj.color};top:100%;margin-top:2px">${escapeHtml(store.name)}</div></div>`;
+                    markerAnchor = new naver.maps.Point(store.clientObj.width / 2, store.clientObj.height + 2);
+                }
+
+                const marker = new naver.maps.Marker({ position: new naver.maps.LatLng(store.lat, store.lng), icon: { content: markerContent, anchor: markerAnchor } });
+                marker.set('storeData', store);
+                naver.maps.Event.addListener(marker, 'click', () => openStoreInfo(marker));
+                allMarkers.push(marker);
+            });
+        }
+
+        function openStoreInfo(marker) {
+            const store = marker.get('storeData');
+            if (activeInfoWindow?.storeKey === store.storeKey) {
+                activeInfoWindow.close();
+                activeInfoWindow = null;
+                return;
+            }
+            if (activeInfoWindow) activeInfoWindow.close();
+
+            let recordsHtml = '';
+            if (store.dataType === 'toss') {
+                const fields = store.records[0].detailFields;
+                const fieldsHtml = fields.length ? fields.map(field => `
+                    <div class="info-item">
+                        <span class="info-label">${escapeHtml(field.label)}</span>
+                        <span class="info-data">${escapeHtml(field.value)}</span>
+                    </div>`).join('') : '<div class="info-item">표시할 상세 항목이 없습니다.</div>';
+                recordsHtml = `<div class="record-card" style="border-left-color:${store.clientObj.color}">${fieldsHtml}</div>`;
+            } else {
+                recordsHtml = store.validRecords.map(record => `
+                    <div class="record-card">
+                        <span class="time-badge">🗓️ ${escapeHtml(record.datePart)} &nbsp; ⏰ ${escapeHtml(record.timePart)}</span>
+                        <div class="info-item"><span class="info-label">접수번호</span><span class="info-data">${escapeHtml(record.reqNo)}</span></div>
+                        <div class="info-item"><span class="info-label">모델명</span><span class="info-data">${escapeHtml(record.model)}</span></div>
+                        <div class="info-item"><span class="info-label">장애현상</span><span class="info-data note-highlight">${escapeHtml(record.symptom)}</span></div>
+                    </div>`).join('');
+            }
+            const content = `<div class="info-box"><div class="info-header"><div class="info-title" style="color:${store.clientObj.color}"><span style="font-size:11px;opacity:.6">${escapeHtml(store.code)}</span>${escapeHtml(store.name)}</div></div>${recordsHtml}</div>`;
+            activeInfoWindow = new naver.maps.InfoWindow({ borderWidth: 0, backgroundColor: 'transparent', disableAnchor: true });
+            activeInfoWindow.setContent(content);
+            activeInfoWindow.storeKey = store.storeKey;
+            activeInfoWindow.open(naverMap, marker);
+        }
+
+        async function initMap() {
+            naverMap = new naver.maps.Map('map', { center: new naver.maps.LatLng(37.5665, 126.9780), zoom: 12, zoomControl: false });
+            naver.maps.Event.addListener(naverMap, 'click', () => {
+                if (activeInfoWindow) { activeInfoWindow.close(); activeInfoWindow = null; }
+                document.getElementById('autocomplete-list').style.display = 'none';
+            });
+
+            faultDatePicker = flatpickr('#fault-date-picker', { mode: 'multiple', locale: 'ko', dateFormat: 'Y-m-d', onChange: updateFilters });
+            tossDatePicker = flatpickr('#toss-date-picker', { mode: 'multiple', locale: 'ko', dateFormat: 'Y-m-d', onChange: updateFilters });
+            bindSidebarEvents();
+            bindSearchEvents();
+
+            const baseUrl = `https://docs.google.com/spreadsheets/d/${CONFIG.SHEET_ID}/gviz/tq?tqx=out:json`;
+            const faultUrl = `${baseUrl}&sheet=${encodeURIComponent(CONFIG.SHEETS.fault.name)}&range=${encodeURIComponent(CONFIG.SHEETS.fault.range)}`;
+            // 빈 앞 행이 GViz 응답에서 생략되어도 어긋나지 않도록 실제 3행부터 조회합니다.
+            const tossRange = `A${CONFIG.SHEETS.toss.headerRow}:${CONFIG.SHEETS.toss.lastColumn}`;
+            const tossUrl = `${baseUrl}&sheet=${encodeURIComponent(CONFIG.SHEETS.toss.name)}&range=${encodeURIComponent(tossRange)}&headers=0`;
+            const [faultResult, tossResult] = await Promise.allSettled([
+                fetchGviz(faultUrl, CONFIG.SHEETS.fault.name),
+                fetchGviz(tossUrl, CONFIG.SHEETS.toss.name)
+            ]);
+
+            const coordTracker = {};
+            if (faultResult.status === 'fulfilled') processFaultRows(faultResult.value.rows, coordTracker);
+            else {
+                console.error(faultResult.reason);
+                setSheetStatus('fault', faultResult.reason.message || String(faultResult.reason));
+            }
+            if (tossResult.status === 'fulfilled') processTossTable(tossResult.value);
+            else {
+                console.error(tossResult.reason);
+                setSheetStatus('toss', tossResult.reason.message || String(tossResult.reason));
+            }
+
+            createMarkers();
+            syncFaultSheetToggle();
+            updateFilters();
+        }
+
         window.handleSelectGeo = (coreName, lat, lng) => {
-            const input = document.getElementById('address-input');
-            input.value = coreName;
+            document.getElementById('address-input').value = coreName;
             document.getElementById('autocomplete-list').style.display = 'none';
             isSearchMode = true;
             naverMap.setCenter(new naver.maps.LatLng(lat, lng));
@@ -519,120 +622,79 @@
             updateFilters();
         };
 
-        window.handleSelectStore = (storeKey) => {
-            const targetStore = masterStoreData.get(storeKey);
-            if (targetStore) {
-                document.getElementById('address-input').value = targetStore.name;
-                document.getElementById('autocomplete-list').style.display = 'none';
-                isSearchMode = true;
+        window.handleSelectStore = storeKey => {
+            const store = masterStoreData.get(storeKey);
+            if (!store) return;
+            document.getElementById('address-input').value = store.name;
+            document.getElementById('autocomplete-list').style.display = 'none';
+            isSearchMode = true;
 
-                // 고객사 필터가 꺼져있다면 강제로 켜주기
-                const clientChk = document.querySelector(`input[data-client="${targetStore.clientObj.id}"]`);
-                if (clientChk && !clientChk.checked) clientChk.checked = true;
-
-                updateFilters();
-
-                naverMap.setCenter(new naver.maps.LatLng(targetStore.lat, targetStore.lng));
-                naverMap.setZoom(17);
-
-                // 마커를 찾아서 강제로 클릭 이벤트 발생시켜 정보창 열기
-                const marker = allMarkers.find(m => m.get('storeData').storeKey === storeKey);
-                if (marker) {
-                    naver.maps.Event.trigger(marker, 'click');
-                }
+            if (store.sheetId === 'toss') {
+                document.getElementById('toss-sheet-enabled').checked = true;
+            } else {
+                const clientCheckbox = document.querySelector(`input[data-client="${store.clientObj.id}"]`);
+                if (clientCheckbox) clientCheckbox.checked = true;
+                syncFaultSheetToggle();
             }
+            updateFilters();
+            naverMap.setCenter(new naver.maps.LatLng(store.lat, store.lng));
+            naverMap.setZoom(17);
+            const marker = allMarkers.find(item => item.get('storeData').storeKey === storeKey);
+            if (marker) naver.maps.Event.trigger(marker, 'click');
         };
 
         function updateFilters() {
+            if (!faultDatePicker || !tossDatePicker) return;
             if (activeInfoWindow) { activeInfoWindow.close(); activeInfoWindow = null; }
-            
-            const activeClients = Array.from(document.querySelectorAll('input[data-client]:checked')).map(el => el.dataset.client);
-            const selectedDates = flatpickrInst.selectedDates.map(d => flatpickr.formatDate(d, "Y-m-d"));
+
+            const activeClients = Array.from(document.querySelectorAll('input[data-client]:checked')).map(element => element.dataset.client);
+            const tossEnabled = document.getElementById('toss-sheet-enabled').checked;
+            const faultDates = faultDatePicker.selectedDates.map(date => flatpickr.formatDate(date, 'Y-m-d'));
+            const tossDates = tossDatePicker.selectedDates.map(date => flatpickr.formatDate(date, 'Y-m-d'));
             const showDay = document.getElementById('chk-day').checked;
             const showNight = document.getElementById('chk-night').checked;
             const showLate = document.getElementById('chk-late').checked;
-            
-            // 검색 모드일 때 검색어 추출
-            let searchQuery = "";
-            if (isSearchMode) {
-                searchQuery = document.getElementById('address-input').value.toLowerCase();
-            }
+            const searchQuery = isSearchMode ? document.getElementById('address-input').value.trim().toLowerCase() : '';
 
-            let visibleStoreCount = 0; 
-            let totalRecordsVisible = 0;
+            let visibleFaultStores = 0;
+            let visibleTossStores = 0;
+            let visibleFaultRecords = 0;
 
             allMarkers.forEach(marker => {
                 const store = marker.get('storeData');
-                
-                if (!activeClients.includes(store.clientObj.id)) {
-                    marker.setMap(null); return;
-                }
+                const sheetEnabled = store.sheetId === 'toss' ? tossEnabled : activeClients.includes(store.clientObj.id);
+                if (!sheetEnabled) { marker.setMap(null); return; }
 
-                // 검색어 매칭 확인
-                let matchSearch = true;
-                if (isSearchMode && searchQuery !== "") {
-                    matchSearch = store.name.toLowerCase().includes(searchQuery) || 
-                                  store.code.toLowerCase().includes(searchQuery) || 
-                                  store.addr.toLowerCase().includes(searchQuery);
-                }
-
-                if (!matchSearch) {
-                    marker.setMap(null); return;
-                }
+                const searchMatches = !searchQuery || store.name.toLowerCase().includes(searchQuery) || store.code.toLowerCase().includes(searchQuery) || store.addr.toLowerCase().includes(searchQuery);
+                if (!searchMatches) { marker.setMap(null); return; }
 
                 if (store.dataType === 'toss') {
-                    /*
-                     * 토스페이는 접수시간이 없으므로 시간대 필터를 적용하지 않습니다.
-                     * 날짜 필터는 설치 예정일을 기준으로 적용합니다.
-                     */
-                    store.validRecords = store.records.filter(r => {
-                        return (
-                            selectedDates.length === 0 ||
-                            selectedDates.includes(r.datePart)
-                        );
-                    });
+                    store.validRecords = store.records.filter(record => tossDates.length === 0 || tossDates.includes(record.datePart));
                 } else {
-                    // 기존 장애내역 고객사
-                    store.validRecords = store.records.filter(r => {
-                        const dateMatch =
-                            selectedDates.length === 0 ||
-                            selectedDates.includes(r.datePart);
-                
-                        let timeMatch = false;
-                
-                        if (r.timeSlot === 'day' && showDay) timeMatch = true;
-                        if (r.timeSlot === 'night' && showNight) timeMatch = true;
-                        if (r.timeSlot === 'late' && showLate) timeMatch = true;
-                
-                        return dateMatch && timeMatch;
+                    store.validRecords = store.records.filter(record => {
+                        const dateMatches = faultDates.length === 0 || faultDates.includes(record.datePart);
+                        const timeMatches = (record.timeSlot === 'day' && showDay) || (record.timeSlot === 'night' && showNight) || (record.timeSlot === 'late' && showLate);
+                        return dateMatches && timeMatches;
                     });
                 }
 
-                if (store.validRecords.length > 0) {
-                    store.validRecords.sort((a, b) => new Date(a.rawDateStr) - new Date(b.rawDateStr));
-                    marker.setMap(naverMap);
-                    visibleStoreCount++;
-
-                    // 설치점포는 기존 장애내역 건수에 포함하지 않습니다.
-                    if (store.dataType !== 'toss') {
-                        totalRecordsVisible += store.validRecords.length;
-                    }
-                } else {
-                    marker.setMap(null);
+                if (!store.validRecords.length) { marker.setMap(null); return; }
+                store.validRecords.sort((a, b) => new Date(a.rawDateStr) - new Date(b.rawDateStr));
+                marker.setMap(naverMap);
+                if (store.sheetId === 'toss') visibleTossStores++;
+                else {
+                    visibleFaultStores++;
+                    visibleFaultRecords += store.validRecords.length;
                 }
             });
 
-            document.getElementById('count-bar').innerText = `현재 조건에 맞는 점포 ${visibleStoreCount}개 표시 중`;
-            document.getElementById('record-count-display').innerText = `해당 기간 내 장애내역 ${totalRecordsVisible}건 조회`;
-            
-            const mapEl = document.getElementById('map');
-            if (document.getElementById('showLabels').checked) {
-                mapEl.classList.remove('hide-labels');
-            } else {
-                mapEl.classList.add('hide-labels');
-            }
+            document.getElementById('count-bar').textContent = `장애내역 ${visibleFaultStores}개 · 토스페이 ${visibleTossStores}개 표시 중`;
+            document.getElementById('fault-record-count').textContent = `해당 기간 내 장애내역 ${visibleFaultRecords}건 조회`;
+            document.getElementById('toss-store-count').textContent = `설치점포 ${visibleTossStores}개 조회`;
+            document.getElementById('map').classList.toggle('hide-fault-labels', !document.getElementById('show-fault-labels').checked);
+            document.getElementById('map').classList.toggle('hide-toss-labels', !document.getElementById('show-toss-labels').checked);
         }
-        
+
         window.onload = initMap;
     </script>
 </body>
