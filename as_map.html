@@ -42,6 +42,10 @@
         #sidebar-ui.open .sheet-panel.active { transform: translateX(0); }
         .panel-heading { display: flex; align-items: center; gap: 7px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #eee; color: #333; font-size: 14px; font-weight: 800; }
         .panel-heading input { margin: 0; }
+        .sheet-btn-outer { display: flex; align-items: center; justify-content: center; box-sizing: border-box; width: 100%; min-height: 36px; margin-bottom: 10px; padding: 8px 12px; border-radius: 8px; background: #217346; color: #fff; box-shadow: 0 3px 8px rgba(33,115,70,.22); text-decoration: none; font-size: 12px; font-weight: 800; transition: background-color .18s, box-shadow .18s, transform .18s; }
+        .sheet-btn-outer:hover { background: #185c37; box-shadow: 0 5px 12px rgba(33,115,70,.28); transform: translateY(-1px); }
+        .sheet-btn-outer:active { transform: translateY(0); }
+        .sheet-link-divider { margin: 0 0 13px; border: 0; border-top: 1px solid #e4e8ee; }
         .control-section-title { font-size: 13px; font-weight: bold; color: #888; margin: 3px 0 7px; }
         .control-item { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; margin: 7px 0; }
         .control-item input[type="checkbox"], .panel-heading input[type="checkbox"] { accent-color: #1677ff; }
@@ -104,6 +108,13 @@
         .info-data { padding-left: 5px; word-break: break-all; white-space: normal; flex: 1; }
         .note-highlight { color: #d32f2f; font-weight: bold; }
         .time-badge { font-size: 11px; font-weight: 800; color: #1b5e20; margin-bottom: 4px; display: block; border-bottom: 1px dashed #ccc; padding-bottom: 4px; }
+        .btn-group { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #e7eaf0; }
+        .nav-btn { display: flex; align-items: center; justify-content: center; min-height: 37px; border-radius: 7px; color: #fff; text-decoration: none; font-size: 12px; font-weight: 900; transition: filter .16s, transform .16s, box-shadow .16s; }
+        .nav-btn:hover { filter: brightness(.96); transform: translateY(-1px); box-shadow: 0 4px 9px rgba(15,23,42,.16); }
+        .nav-btn:active { transform: translateY(0); box-shadow: none; }
+        .btn-naver { background: #03c75a; }
+        .btn-kakao { background: #fee500; color: #191919; }
+        .btn-tmap { background: #ff5a1f; }
         #map.hide-fault-labels .marker-label-fault, #map.hide-toss-labels .marker-label-toss { opacity: 0 !important; }
 
         @media (max-width: 520px) {
@@ -134,15 +145,17 @@
         </div>
 
         <section id="panel-fault" class="sheet-panel" aria-label="장애내역 시트 옵션">
-            <label class="panel-heading"><input type="checkbox" id="fault-sheet-enabled"> 🛠️ 장애내역 전체 표시</label>
+            <a href="https://docs.google.com/spreadsheets/d/1lLt9pPq_BwVz8ITeJpTCDAzOILvo0wZ795aJcQ4hT_w/edit#gid=0" target="_blank" rel="noopener noreferrer" class="sheet-btn-outer">📊 구글 시트 이동</a>
+            <hr class="sheet-link-divider">
+            <label class="panel-heading"><input type="checkbox" id="fault-sheet-enabled" data-sheet-toggle="fault"> 🛠️ 장애내역 전체 표시</label>
             <div id="fault-sheet-status" class="sheet-status"></div>
 
             <div class="control-section-title">🏢 고객사 필터</div>
-            <label class="control-item"><input type="checkbox" data-client="k7"><span class="dot" style="background:#f57c00"></span>세븐일레븐</label>
-            <label class="control-item"><input type="checkbox" data-client="ria"><span class="dot" style="background:#d32f2f"></span>롯데리아</label>
-            <label class="control-item"><input type="checkbox" data-client="angel"><span class="dot" style="background:#795548"></span>엔제리너스</label>
-            <label class="control-item"><input type="checkbox" data-client="kkd"><span class="dot" style="background:#2e7d32"></span>KKD</label>
-            <label class="control-item"><input type="checkbox" data-client="con"><span class="dot" style="background:#1976d2"></span>컨세션</label>
+            <label class="control-item"><input type="checkbox" data-client="k7" data-sheet-toggle="fault"><span class="dot" style="background:#f57c00"></span>세븐일레븐</label>
+            <label class="control-item"><input type="checkbox" data-client="ria" data-sheet-toggle="fault"><span class="dot" style="background:#d32f2f"></span>롯데리아</label>
+            <label class="control-item"><input type="checkbox" data-client="angel" data-sheet-toggle="fault"><span class="dot" style="background:#795548"></span>엔제리너스</label>
+            <label class="control-item"><input type="checkbox" data-client="kkd" data-sheet-toggle="fault"><span class="dot" style="background:#2e7d32"></span>KKD</label>
+            <label class="control-item"><input type="checkbox" data-client="con" data-sheet-toggle="fault"><span class="dot" style="background:#1976d2"></span>컨세션</label>
 
             <hr class="section-line">
             <div class="control-section-title">📅 장애 날짜 필터</div>
@@ -161,7 +174,9 @@
         </section>
 
         <section id="panel-toss" class="sheet-panel active" aria-label="토스페이 시트 옵션">
-            <label class="panel-heading"><input type="checkbox" id="toss-sheet-enabled" checked> 💳 토스페이 전체 표시</label>
+            <a href="https://docs.google.com/spreadsheets/d/1lLt9pPq_BwVz8ITeJpTCDAzOILvo0wZ795aJcQ4hT_w/edit?gid=1966779140#gid=1966779140" target="_blank" rel="noopener noreferrer" class="sheet-btn-outer">📊 구글 시트 이동</a>
+            <hr class="sheet-link-divider">
+            <label class="panel-heading"><input type="checkbox" id="toss-sheet-enabled" data-sheet-toggle="toss" checked> 💳 토스페이 전체 표시</label>
             <div id="toss-sheet-status" class="sheet-status"></div>
 
             <div class="control-section-title">📅 설치 예정일 필터</div>
@@ -306,8 +321,24 @@
             master.indeterminate = checkedCount > 0 && checkedCount < children.length;
         }
 
+        function deactivateOtherSheetToggles(activeSheetId) {
+            document.querySelectorAll('[data-sheet-toggle]').forEach(input => {
+                if (input.dataset.sheetToggle !== activeSheetId) {
+                    input.checked = false;
+                    input.indeterminate = false;
+                }
+            });
+        }
+
         function bindSidebarEvents() {
             const sidebar = document.getElementById('sidebar-ui');
+            sidebar.addEventListener('change', event => {
+                const target = event.target;
+                if (target.matches('[data-sheet-toggle]') && target.checked) {
+                    deactivateOtherSheetToggles(target.dataset.sheetToggle);
+                }
+            }, true);
+
             document.querySelectorAll('.sheet-tab').forEach(button => {
                 button.addEventListener('click', () => {
                     const selectedId = button.dataset.panel;
@@ -324,15 +355,21 @@
             });
 
             document.getElementById('fault-sheet-enabled').addEventListener('change', event => {
-                document.querySelectorAll('input[data-client]').forEach(input => { input.checked = event.target.checked; });
+                const shouldEnable = event.target.checked;
+                document.querySelectorAll('input[data-client]').forEach(input => { input.checked = shouldEnable; });
+                event.target.checked = shouldEnable;
                 event.target.indeterminate = false;
                 updateFilters();
             });
-            document.querySelectorAll('input[data-client]').forEach(input => input.addEventListener('change', () => {
+            document.querySelectorAll('input[data-client]').forEach(input => input.addEventListener('change', event => {
                 syncFaultSheetToggle();
                 updateFilters();
             }));
-            ['toss-sheet-enabled', 'chk-day', 'chk-night', 'chk-late', 'show-fault-labels', 'show-toss-labels'].forEach(id => {
+            document.getElementById('toss-sheet-enabled').addEventListener('change', event => {
+                syncFaultSheetToggle();
+                updateFilters();
+            });
+            ['chk-day', 'chk-night', 'chk-late', 'show-fault-labels', 'show-toss-labels'].forEach(id => {
                 document.getElementById(id).addEventListener('change', updateFilters);
             });
         }
@@ -549,6 +586,20 @@
             }
             if (activeInfoWindow) activeInfoWindow.close();
 
+            const searchName = store.name.trim().startsWith('세븐일레븐')
+                ? store.name.trim()
+                : '세븐일레븐 ' + store.name.trim();
+            const encodedName = encodeURIComponent(searchName);
+            const naverUrl = `https://map.naver.com/p/search/${encodedName}`;
+            const kakaoUrl = `https://map.kakao.com/link/to/${encodedName},${store.lat},${store.lng}`;
+            const tmapUrl = `tmap://route?goalname=${encodedName}&goalx=${store.lng}&goaly=${store.lat}`;
+            const navigationHtml = `
+                <div class="btn-group">
+                    <a href="${naverUrl}" target="_blank" rel="noopener noreferrer" class="nav-btn btn-naver">네이버</a>
+                    <a href="${kakaoUrl}" target="_blank" rel="noopener noreferrer" class="nav-btn btn-kakao">카카오</a>
+                    <a href="${tmapUrl}" class="nav-btn btn-tmap">Tmap</a>
+                </div>`;
+
             let recordsHtml = '';
             if (store.dataType === 'toss') {
                 const fields = store.records[0].detailFields;
@@ -567,7 +618,7 @@
                         <div class="info-item"><span class="info-label">장애현상</span><span class="info-data note-highlight">${escapeHtml(record.symptom)}</span></div>
                     </div>`).join('');
             }
-            const content = `<div class="info-box"><div class="info-header"><div class="info-title" style="color:${store.clientObj.color}"><span style="font-size:11px;opacity:.6">${escapeHtml(store.code)}</span>${escapeHtml(store.name)}</div></div>${recordsHtml}</div>`;
+            const content = `<div class="info-box"><div class="info-header"><div class="info-title" style="color:${store.clientObj.color}"><span style="font-size:11px;opacity:.6">${escapeHtml(store.code)}</span>${escapeHtml(store.name)}</div></div>${recordsHtml}${navigationHtml}</div>`;
             activeInfoWindow = new naver.maps.InfoWindow({ borderWidth: 0, backgroundColor: 'transparent', disableAnchor: true });
             activeInfoWindow.setContent(content);
             activeInfoWindow.storeKey = store.storeKey;
@@ -630,8 +681,11 @@
             isSearchMode = true;
 
             if (store.sheetId === 'toss') {
+                deactivateOtherSheetToggles('toss');
                 document.getElementById('toss-sheet-enabled').checked = true;
+                syncFaultSheetToggle();
             } else {
+                deactivateOtherSheetToggles('fault');
                 const clientCheckbox = document.querySelector(`input[data-client="${store.clientObj.id}"]`);
                 if (clientCheckbox) clientCheckbox.checked = true;
                 syncFaultSheetToggle();
