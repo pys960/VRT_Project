@@ -367,6 +367,7 @@
 
         function setSidebarOpen(open) {
             const sidebar = document.getElementById('sidebar-ui');
+            if (sidebar.classList.contains('open') === open) return;
             sidebar.classList.add('animating');
             window.requestAnimationFrame(() => {
                 sidebar.classList.toggle('open', open);
@@ -535,7 +536,7 @@
                     return;
                 }
                 selectSheetPanel(selectedId);
-                setSidebarOpen(true);
+                if (!sidebar.classList.contains('open')) setSidebarOpen(true);
                 updateFilters();
             });
 
@@ -671,15 +672,9 @@
             }
 
             const rawHeaders = detectedHeader.headers;
-            const fallbackLabelRow = detectedHeader.rowIndex > 0 ? table.rows[detectedHeader.rowIndex - 1] : null;
-            const displayLabels = rawHeaders.map((_, index) => {
-                const manifestLabel = Array.isArray(sheetConfig.displayLabels) ? String(sheetConfig.displayLabels[index] || '').trim() : '';
-                const fallbackLabel = fallbackLabelRow ? getCellFormatted(fallbackLabelRow, index) : '';
-                const normalizedFallback = fallbackLabel === '-' ? '' : fallbackLabel;
-                // 이전 배포본이 빈 displayLabels 배열을 반환하더라도 2행 표시명과
-                // 3행 시스템 헤더를 순서대로 대체 사용해 상세값이 사라지지 않게 합니다.
-                return manifestLabel || normalizedFallback || String(rawHeaders[index] || '').trim();
-            });
+            // 실제 시스템 헤더행과 같은 열의 값만 상세 정보로 사용합니다.
+            // 헤더가 비어 있는 열은 제외되므로 시트별로 존재하는 항목만 표시됩니다.
+            const displayLabels = rawHeaders.map(header => String(header || '').trim());
             const aliases = CONFIG.TASK_HEADER_ALIASES;
             const schema = {
                 code: findHeaderIndex(rawHeaders, aliases.code),
