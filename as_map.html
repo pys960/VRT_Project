@@ -705,6 +705,7 @@
                     if ([schema.code, schema.name, schema.lat, schema.lng].includes(index)) return;
                     // 2행 표시명 또는 3행 시스템 헤더가 비어 있으면 지도 정보창에서는 숨깁니다.
                     if (!label || !String(rawHeaders[index] || '').trim()) return;
+                    if (normalizeHeader(label) === '등록상태') return;
                     detailFields.push({ label, value: getCellFormatted(row, index) });
                 });
 
@@ -832,7 +833,7 @@
                 const fieldsHtml = fields.length ? fields.map(field => `
                     <div class="info-item">
                         <span class="info-label">${escapeHtml(field.label)}</span>
-                        <span class="info-data">${escapeHtml(field.value)}</span>
+                        <span class="info-data${normalizeHeader(field.label).includes('특이사항') ? ' note-highlight' : ''}">${escapeHtml(field.value)}</span>
                     </div>`).join('') : '<div class="info-item">표시할 상세 항목이 없습니다.</div>';
                 recordsHtml = `<div class="record-card" style="border-left-color:${store.clientObj.color}">${fieldsHtml}</div>`;
             } else {
