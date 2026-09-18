@@ -443,6 +443,31 @@
             return loadTaskSheetManifestFromDatabase();
         }
 
+        async function loadTaskRowsFromDatabase(sheetConfig) {
+            const supabase = CONFIG.SUPABASE;
+            const rows = [];
+            for (let offset = 0; ; offset += supabase.pageSize) {
+                const query = new URLSearchParams({
+                    select: 'store_code,store_name,address,scheduled_on,completed_on,work_status,latitude,longitude,display_fields,source_data,sheet_row',
+                    spreadsheet_id: `eq.${CONFIG.SHEET_ID}`,
+                    sheet_gid: `eq.${sheetConfig.gid}`,
+                    is_active: 'eq.true',
+                    order: 'sheet_row.asc',
+                    offset: String(offset),
+                    limit: String(supabase.pageSize)
+                });
+                const response = await fetch(`${supabase.url}/rest/v1/${supabase.table}?${query}`, {
+                    headers: { apikey: supabase.anonKey, Authorization: `Bearer ${supabase.anonKey}` },
+                    cache: 'no-store'
+                });
+                if (!response.ok) throw new Error(`${sheetConfig.name} 점포 조회 실패 (${response.status})`);
+                const pageRows = await response.json();
+                rows.push(...pageRows);
+                if (pageRows.length < supabase.pageSize) break;
+            }
+            return rows;
+        }
+
         function getTaskManifestSignature(sheetList) {
             return JSON.stringify(sheetList.map(sheet => [sheet.id, sheet.name, sheet.order, sheet.displayLabels]));
         }
@@ -672,9 +697,12 @@
             }
 
             const rawHeaders = detectedHeader.headers;
-            // 실제 시스템 헤더행과 같은 열의 값만 상세 정보로 사용합니다.
-            // 헤더가 비어 있는 열은 제외되므로 시트별로 존재하는 항목만 표시됩니다.
-            const displayLabels = rawHeaders.map(header => String(header || '').trim());
+            const displayLabelRow = detectedHeader.rowIndex > 0 ? table.rows[detectedHeader.rowIndex - 1] : null;
+            // 3행 시스템 헤더로 열을 식별하고, 같은 열의 2행 값이 있으면 화면 표시명으로 사용합니다.
+            const displayLabels = rawHeaders.map((header, index) => {
+                const customLabel = displayLabelRow ? getCellFormatted(displayLabelRow, index) : '-';
+                return customLabel && customLabel !== '-' ? customLabel : String(header || '').trim();
+            });
             const aliases = CONFIG.TASK_HEADER_ALIASES;
             const schema = {
                 code: findHeaderIndex(rawHeaders, aliases.code),
@@ -703,10 +731,10 @@
                 const detailFields = [];
                 displayLabels.forEach((label, index) => {
                     if ([schema.code, schema.name, schema.lat, schema.lng].includes(index)) return;
-                    // 2행 표시명 또는 3행 시스템 헤더가 비어 있으면 지도 정보창에서는 숨깁니다.
-                    if (!label || !String(rawHeaders[index] || '').trim()) return;
-                    if (normalizeHeader(label) === '등록상태') return;
-                    detailFields.push({ label, value: getCellFormatted(row, index) });
+                    const systemHeader = String(rawHeaders[index] || '').trim();
+                    if (!label || !systemHeader) return;
+                    if (normalizeHeader(systemHeader) === '등록상태') return;
+                    detailFields.push({ label, systemHeader, value: getCellFormatted(row, index) });
                 });
 
                 const installDateRaw = getCellRaw(row, schema.installDate);
@@ -732,6 +760,62 @@
             if (validCoordinateCount === 0) {
                 setSheetStatus(sheetConfig.id, '위도·경도가 모두 입력된 데이터 행이 없습니다.');
                 console.warn(`${sheetConfig.name} 시트에 위도·경도가 모두 입력된 데이터 행이 없습니다.`);
+            }
+        }
+
+        function processTaskDatabaseRows(rows, sheetConfig) {
+            const taskClientObj = { id: sheetConfig.id, name: sheetConfig.name, color: sheetConfig.color, icon: '', width: 30, height: 30 };
+            const coreHeaders = new Set([
+                ...CONFIG.TASK_HEADER_ALIASES.code,
+                ...CONFIG.TASK_HEADER_ALIASES.name,
+                ...CONFIG.TASK_HEADER_ALIASES.lat,
+                ...CONFIG.TASK_HEADER_ALIASES.lng
+            ].map(normalizeHeader));
+
+            let validCoordinateCount = 0;
+            rows.forEach(row => {
+                const code = String(row.store_code || '').trim();
+                const name = String(row.store_name || '').trim();
+                const lat = Number(row.latitude);
+                const lng = Number(row.longitude);
+                if (!code || !name || !Number.isFinite(lat) || !Number.isFinite(lng)) return;
+                validCoordinateCount++;
+
+                const orderedFields = Array.isArray(row.display_fields)
+                    ? row.display_fields.map(field => ({
+                        label: String(field?.label || ''),
+                        systemHeader: String(field?.systemHeader || field?.label || ''),
+                        value: String(field?.value ?? '').trim() || '-'
+                    }))
+                    : Object.entries(row.source_data || {}).map(([label, value]) => ({ label, systemHeader: label, value: String(value ?? '').trim() || '-' }));
+                const detailFields = orderedFields.filter(field => {
+                    const normalizedSystemHeader = normalizeHeader(field.systemHeader);
+                    return field.label && !coreHeaders.has(normalizedSystemHeader) && normalizedSystemHeader !== '등록상태';
+                });
+                const completedOn = String(row.completed_on || '').trim();
+                const workStatus = String(row.work_status || '').trim();
+                const workState = completedOn ? 'completed' : (/제외/.test(workStatus) ? 'excluded' : 'pending');
+                const scheduledOn = String(row.scheduled_on || '-');
+                const storeKey = `${sheetConfig.id}:${code}`;
+                masterStoreData.set(storeKey, {
+                    sheetId: sheetConfig.id,
+                    sheetName: sheetConfig.name,
+                    storeKey,
+                    code,
+                    name,
+                    addr: String(row.address || '-'),
+                    lat,
+                    lng,
+                    clientObj: taskClientObj,
+                    dataType: 'task',
+                    workState,
+                    workStatus: completedOn || workStatus || '-',
+                    records: [{ datePart: scheduledOn, rawDateStr: scheduledOn, detailFields }]
+                });
+            });
+
+            if (validCoordinateCount === 0) {
+                setSheetStatus(sheetConfig.id, 'DB에 위도·경도가 입력된 점포가 없습니다. 시트 동기화를 확인해 주세요.');
             }
         }
 
@@ -833,7 +917,7 @@
                 const fieldsHtml = fields.length ? fields.map(field => `
                     <div class="info-item">
                         <span class="info-label">${escapeHtml(field.label)}</span>
-                        <span class="info-data${normalizeHeader(field.label).includes('특이사항') ? ' note-highlight' : ''}">${escapeHtml(field.value)}</span>
+                        <span class="info-data${normalizeHeader(field.systemHeader || field.label).includes('특이사항') ? ' note-highlight' : ''}">${escapeHtml(field.value)}</span>
                     </div>`).join('') : '<div class="info-item">표시할 상세 항목이 없습니다.</div>';
                 recordsHtml = `<div class="record-card" style="border-left-color:${store.clientObj.color}">${fieldsHtml}</div>`;
             } else {
@@ -885,11 +969,8 @@
             const faultRequest = CONFIG.SHEETS.fault.enabled === false
                 ? Promise.resolve({ cols: [], rows: [] })
                 : fetchGviz(faultUrl, CONFIG.SHEETS.fault.name);
-            // A1 체크박스, 2행 표시명, 3행 시스템 헤더를 함께 읽습니다.
-            const taskRequests = Array.from(taskSheets.values()).map(sheet => {
-                const url = `${baseUrl}&sheet=${encodeURIComponent(sheet.name)}&range=${encodeURIComponent('A1:ZZ')}&headers=0`;
-                return fetchGviz(url, sheet.name);
-            });
+            // 웹앱과 GitHub 지도가 동일한 정렬·표시명 데이터를 사용하도록 공용 DB 행을 조회합니다.
+            const taskRequests = Array.from(taskSheets.values()).map(sheet => loadTaskRowsFromDatabase(sheet));
             const [faultResult, ...taskResults] = await Promise.allSettled([faultRequest, ...taskRequests]);
 
             const coordTracker = {};
@@ -901,7 +982,7 @@
             }
             Array.from(taskSheets.values()).forEach((sheet, index) => {
                 const result = taskResults[index];
-                if (result?.status === 'fulfilled') processTaskTable(result.value, sheet);
+                if (result?.status === 'fulfilled') processTaskDatabaseRows(result.value, sheet);
                 else if (result?.status === 'rejected') {
                     console.error(result.reason);
                     setSheetStatus(sheet.id, result.reason.message || String(result.reason));
