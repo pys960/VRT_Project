@@ -177,6 +177,14 @@
     <script>
         const CONFIG = {
             SHEET_ID: '1lLt9pPq_BwVz8ITeJpTCDAzOILvo0wZ795aJcQ4hT_w',
+            // GitHub Pages에서는 google.script.run을 사용할 수 없으므로
+            // 공용 임시작업 테이블에서 활성 시트 목록을 불러옵니다.
+            SUPABASE: {
+                url: 'https://iyfxozwlrrztedjptscj.supabase.co',
+                anonKey: 'sb_publishable__2sxcdXaLDV1Vw3rEZFNEg_IDoM_NCf',
+                table: 'temporary_task_store_master',
+                pageSize: 1000
+            },
             SHEETS: {
                 // 장애내역은 구조가 달라 기존 방식으로 유지합니다. 임시 작업 시트는 Code.gs가 자동 탐색합니다.
                 fault: { enabled: false, name: '장애내역', range: 'A2:J4500' }
@@ -301,6 +309,32 @@
             element.style.display = message ? 'block' : 'none';
         }
 
+        function showMapLoadNotice(message) {
+            let notice = document.getElementById('map-load-notice');
+            if (!notice) {
+                notice = document.createElement('div');
+                notice.id = 'map-load-notice';
+                Object.assign(notice.style, {
+                    position: 'fixed',
+                    left: '50%',
+                    top: '18px',
+                    transform: 'translateX(-50%)',
+                    zIndex: '9999',
+                    maxWidth: 'calc(100vw - 32px)',
+                    padding: '11px 16px',
+                    borderRadius: '12px',
+                    background: '#fff4e5',
+                    border: '1px solid #ffb74d',
+                    color: '#8a4b00',
+                    fontSize: '13px',
+                    fontWeight: '700',
+                    boxShadow: '0 8px 24px rgba(0,0,0,.16)'
+                });
+                document.body.appendChild(notice);
+            }
+            notice.textContent = message;
+        }
+
         function getCellRaw(row, index) {
             const cell = index >= 0 ? row.c?.[index] : null;
             return cell && cell.v !== null && cell.v !== undefined ? String(cell.v).trim() : '-';
@@ -330,17 +364,64 @@
             });
         }
 
-        function loadTaskSheetManifest() {
-            return new Promise((resolve, reject) => {
-                if (!window.google?.script?.run) {
-                    reject(new Error('Apps Script에서 실행해야 임시 작업 시트를 자동으로 불러올 수 있습니다.'));
-                    return;
+        async function loadTaskSheetManifestFromDatabase() {
+            const supabase = CONFIG.SUPABASE;
+            const uniqueSheets = new Map();
+
+            for (let offset = 0; ; offset += supabase.pageSize) {
+                const query = new URLSearchParams({
+                    select: 'sheet_gid,sheet_name',
+                    spreadsheet_id: `eq.${CONFIG.SHEET_ID}`,
+                    is_active: 'eq.true',
+                    order: 'sheet_name.asc,sheet_gid.asc',
+                    offset: String(offset),
+                    limit: String(supabase.pageSize)
+                });
+                const response = await fetch(`${supabase.url}/rest/v1/${supabase.table}?${query}`, {
+                    headers: {
+                        apikey: supabase.anonKey,
+                        Authorization: `Bearer ${supabase.anonKey}`
+                    },
+                    cache: 'no-store'
+                });
+                if (!response.ok) {
+                    throw new Error(`활성 작업 시트 조회 실패 (${response.status})`);
                 }
-                google.script.run
-                    .withSuccessHandler(result => resolve(Array.isArray(result) ? result : []))
-                    .withFailureHandler(error => reject(new Error(error?.message || String(error))))
-                    .getMapSheetManifest();
-            });
+
+                const rows = await response.json();
+                rows.forEach(row => {
+                    const gid = String(row.sheet_gid ?? '').trim();
+                    const name = String(row.sheet_name ?? '').trim();
+                    if (!gid || !name) return;
+                    uniqueSheets.set(gid, {
+                        id: `task-${gid}`,
+                        name,
+                        gid,
+                        url: `https://docs.google.com/spreadsheets/d/${CONFIG.SHEET_ID}/edit#gid=${gid}`
+                    });
+                });
+                if (rows.length < supabase.pageSize) break;
+            }
+
+            return Array.from(uniqueSheets.values()).sort((a, b) =>
+                a.name.localeCompare(b.name, 'ko-KR', { numeric: true })
+            );
+        }
+
+        async function loadTaskSheetManifest() {
+            if (window.google?.script?.run) {
+                try {
+                    return await new Promise((resolve, reject) => {
+                        google.script.run
+                            .withSuccessHandler(result => resolve(Array.isArray(result) ? result : []))
+                            .withFailureHandler(error => reject(new Error(error?.message || String(error))))
+                            .getMapSheetManifest();
+                    });
+                } catch (error) {
+                    console.warn('Apps Script 시트 구성 조회 실패. 공용 DB 조회로 전환합니다.', error);
+                }
+            }
+            return loadTaskSheetManifestFromDatabase();
         }
 
         function getTaskManifestSignature(sheetList) {
@@ -792,6 +873,10 @@
                 manifest = await loadTaskSheetManifest();
             } catch (error) {
                 console.error(error);
+                showMapLoadNotice(`작업 시트 목록을 불러오지 못했습니다. ${error?.message || error}`);
+            }
+            if (manifest.length === 0) {
+                showMapLoadNotice('표시할 활성 작업 시트가 없습니다. 시트 A1 체크와 DB 동기화 상태를 확인해 주세요.');
             }
             taskManifestSignature = getTaskManifestSignature(manifest);
             renderTaskSheetSidebar(manifest);
