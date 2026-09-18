@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>K7, GRS A/S 장애내역 지도</title>
+    <title>A/S 장애내역 및 임시작업점포 지도</title>
 
     <script type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=enxsrn2016&submodules=geocoder"></script>
     <script type="text/javascript" src="https://navermaps.github.io/maps.js.ncp/docs/js/MarkerClustering.js"></script>
@@ -115,7 +115,7 @@
         .btn-naver { background: #03c75a; }
         .btn-kakao { background: #fee500; color: #191919; }
         .btn-tmap { background: #ff5a1f; }
-        #map.hide-fault-labels .marker-label-fault, #map.hide-toss-labels .marker-label-toss { opacity: 0 !important; }
+        #map.hide-fault-labels .marker-label-fault { opacity: 0 !important; }
 
         @media (max-width: 520px) {
             :root { --panel-width: min(66vw, 235px); }
@@ -139,7 +139,6 @@
     <div id="sidebar-ui">
         <div id="sheet-tabs">
             <button class="sheet-tab" data-panel="fault" title="장애내역 옵션">장애내역</button>
-            <button class="sheet-tab active" data-panel="toss" title="토스페이 옵션">토스페이</button>
         </div>
 
         <section id="panel-fault" class="sheet-panel" aria-label="장애내역 시트 옵션">
@@ -171,22 +170,6 @@
             <label class="control-item"><input type="checkbox" id="show-fault-labels" checked>🏷️ 점포명</label>
         </section>
 
-        <section id="panel-toss" class="sheet-panel active" aria-label="토스페이 시트 옵션">
-            <a href="https://docs.google.com/spreadsheets/d/1lLt9pPq_BwVz8ITeJpTCDAzOILvo0wZ795aJcQ4hT_w/edit?gid=1966779140#gid=1966779140" target="_blank" rel="noopener noreferrer" class="sheet-btn-outer">📊 구글 시트 이동</a>
-            <hr class="sheet-link-divider">
-            <label class="panel-heading"><input type="checkbox" id="toss-sheet-enabled" data-sheet-toggle="toss" checked> 💳 토스페이 전체 표시</label>
-            <div id="toss-sheet-status" class="sheet-status"></div>
-
-            <div class="control-section-title">📅 설치 예정일 필터</div>
-            <input type="text" id="toss-date-picker" class="date-picker" placeholder="날짜 선택">
-            <div id="toss-store-count" class="record-count-display">설치점포 0개 조회</div>
-
-            <hr class="section-line">
-            <div class="control-section-title">보기 설정</div>
-            <label class="control-item"><input type="checkbox" id="show-toss-completed">✅ 작업 완료</label>
-            <label class="control-item"><input type="checkbox" id="show-toss-excluded">🔘 작업 제외</label>
-            <label class="control-item"><input type="checkbox" id="show-toss-labels" checked>🏷️ 점포명</label>
-        </section>
     </div>
 
     <div id="map"></div>
@@ -195,26 +178,26 @@
         const CONFIG = {
             SHEET_ID: '1lLt9pPq_BwVz8ITeJpTCDAzOILvo0wZ795aJcQ4hT_w',
             SHEETS: {
-                // enabled를 false로 바꾸면 해당 시트의 버튼·패널·마커를 모두 비활성화합니다.
-                fault: { enabled: false, name: '장애내역', range: 'A2:J4500' },
-                toss: { enabled: true, name: '토스페이', headerRow: 3, dataStartRow: 4, lastColumn: 'Z', installDateColumn: 4, workStatusColumn: 5 }
+                // 장애내역은 구조가 달라 기존 방식으로 유지합니다. 임시 작업 시트는 Code.gs가 자동 탐색합니다.
+                fault: { enabled: false, name: '장애내역', range: 'A2:J4500' }
             },
             CLIENTS: [
                 { id: 'k7', name: '세븐일레븐', color: '#f57c00', icon: './icon/세븐일레븐.png', width: 25, height: 25 },
                 { id: 'ria', name: '롯데리아', color: '#d32f2f', icon: './icon/롯데리아.png', width: 31, height: 21 },
                 { id: 'angel', name: '엔제리너스', color: '#795548', icon: './icon/엔젤리너스.png', width: 37, height: 37 },
                 { id: 'kkd', name: '크리스피', color: '#2e7d32', icon: './icon/KKD.png', width: 65, height: 30 },
-                { id: 'con', name: '컨세션', color: '#1976d2', icon: './icon/컨세션.png', width: 30, height: 30 },
-                { id: 'toss', name: '토스페이', color: '#0064FF', icon: '', width: 30, height: 30 }
+                { id: 'con', name: '컨세션', color: '#1976d2', icon: './icon/컨세션.png', width: 30, height: 30 }
             ],
-            TOSS_HEADER_ALIASES: {
+            TASK_HEADER_ALIASES: {
                 code: ['점포코드', '매장코드', '가맹점코드', '코드', 'storecode'],
                 name: ['점포명', '매장명', '가맹점명', '상호명', 'storename'],
                 address: ['주소', '점포주소', '매장주소', 'address'],
                 installDate: ['설치예정일', '설치일', '설치예정일자', '예정일', 'installdate'],
+                workStatus: ['설치완료일', '작업완료일', '완료일', '작업상태', '상태', 'workstatus'],
                 lat: ['위도', 'latitude', 'lat', 'y좌표', 'ycoordinate'],
                 lng: ['경도', 'longitude', 'lng', 'lon', 'x좌표', 'xcoordinate']
-            }
+            },
+            TASK_COLORS: ['#0064ff', '#ef6c00', '#8e44ad', '#00897b', '#c62828', '#3949ab', '#6d4c41', '#2e7d32']
         };
 
         let naverMap;
@@ -223,9 +206,11 @@
         let masterStoreData = new Map();
         let allMarkers = [];
         let faultDatePicker;
-        let tossDatePicker;
+        const taskSheets = new Map();
+        const taskDatePickers = new Map();
+        let taskManifestSignature = '';
         let isSearchMode = false;
-        let activePanelId = 'toss';
+        let activePanelId = 'fault';
 
         function parseDateTime(val) {
             if (!val || val === '-') return { datePart: '-', timePart: '-', totalMins: -1, rawDateStr: '-' };
@@ -250,7 +235,7 @@
             return { datePart, timePart, totalMins, rawDateStr };
         }
 
-        function getTossWorkState(rawValue, formattedValue) {
+        function getTaskWorkState(rawValue, formattedValue) {
             const raw = String(rawValue ?? '').trim();
             const formatted = String(formattedValue ?? '').trim();
             const hasValue = [raw, formatted].some(value => value && value !== '-');
@@ -345,28 +330,96 @@
             });
         }
 
+        function loadTaskSheetManifest() {
+            return new Promise((resolve, reject) => {
+                if (!window.google?.script?.run) {
+                    reject(new Error('Apps Script에서 실행해야 임시 작업 시트를 자동으로 불러올 수 있습니다.'));
+                    return;
+                }
+                google.script.run
+                    .withSuccessHandler(result => resolve(Array.isArray(result) ? result : []))
+                    .withFailureHandler(error => reject(new Error(error?.message || String(error))))
+                    .getMapSheetManifest();
+            });
+        }
+
+        function getTaskManifestSignature(sheetList) {
+            return JSON.stringify(sheetList.map(sheet => [sheet.id, sheet.name, sheet.displayLabels]));
+        }
+
+        function getTaskColor(sheetId) {
+            const hash = Array.from(String(sheetId)).reduce((value, character) => ((value * 31) + character.charCodeAt(0)) >>> 0, 0);
+            return CONFIG.TASK_COLORS[hash % CONFIG.TASK_COLORS.length];
+        }
+
+        function watchTaskSheetManifest() {
+            window.setInterval(async () => {
+                try {
+                    const latest = await loadTaskSheetManifest();
+                    if (getTaskManifestSignature(latest) !== taskManifestSignature) window.location.reload();
+                } catch (error) {
+                    console.warn('임시 작업 시트 구성 확인 실패', error);
+                }
+            }, 60000);
+        }
+
+        function renderTaskSheetSidebar(sheetList) {
+            document.querySelectorAll('[data-dynamic-task]').forEach(element => element.remove());
+            taskSheets.clear();
+            const tabs = document.getElementById('sheet-tabs');
+            const sidebar = document.getElementById('sidebar-ui');
+
+            sheetList.forEach(sheet => {
+                const color = getTaskColor(sheet.id);
+                const config = { ...sheet, color };
+                taskSheets.set(sheet.id, config);
+
+                const tab = document.createElement('button');
+                tab.type = 'button';
+                tab.className = 'sheet-tab';
+                tab.dataset.panel = sheet.id;
+                tab.dataset.dynamicTask = 'true';
+                tab.title = `${sheet.name} 옵션`;
+                tab.textContent = sheet.name;
+                tabs.appendChild(tab);
+
+                const panel = document.createElement('section');
+                panel.id = `panel-${sheet.id}`;
+                panel.className = 'sheet-panel';
+                panel.dataset.dynamicTask = 'true';
+                panel.setAttribute('aria-label', `${sheet.name} 시트 옵션`);
+                panel.innerHTML = `
+                    <a href="${escapeHtml(sheet.url)}" target="_blank" rel="noopener noreferrer" class="sheet-btn-outer">📊 구글 시트 이동</a>
+                    <hr class="sheet-link-divider">
+                    <label class="panel-heading"><input type="checkbox" id="${sheet.id}-sheet-enabled" data-sheet-toggle="${sheet.id}" checked> 📍 ${escapeHtml(sheet.name)} 전체 표시</label>
+                    <div id="${sheet.id}-sheet-status" class="sheet-status"></div>
+                    <div class="control-section-title">📅 설치 예정일 필터</div>
+                    <input type="text" id="${sheet.id}-date-picker" class="date-picker" placeholder="날짜 선택">
+                    <div id="${sheet.id}-store-count" class="record-count-display">설치점포 0개 조회</div>
+                    <hr class="section-line">
+                    <div class="control-section-title">보기 설정</div>
+                    <label class="control-item"><input type="checkbox" id="${sheet.id}-show-completed" data-task-control>✅ 작업 완료</label>
+                    <label class="control-item"><input type="checkbox" id="${sheet.id}-show-excluded" data-task-control>🔘 작업 제외</label>
+                    <label class="control-item"><input type="checkbox" id="${sheet.id}-show-labels" data-task-control checked>🏷️ 점포명</label>`;
+                sidebar.appendChild(panel);
+            });
+        }
+
         function applySheetAvailability() {
             const sidebar = document.getElementById('sidebar-ui');
             const enabledSheetIds = [];
+            const faultTab = document.querySelector('.sheet-tab[data-panel="fault"]');
+            const faultPanel = document.getElementById('panel-fault');
+            const faultEnabled = CONFIG.SHEETS.fault.enabled !== false;
+            faultTab.hidden = !faultEnabled;
+            faultPanel.hidden = !faultEnabled;
+            faultTab.classList.remove('only-visible');
+            if (faultEnabled) enabledSheetIds.push('fault');
+            else faultPanel.querySelectorAll('[data-sheet-toggle]').forEach(input => { input.checked = false; input.indeterminate = false; });
 
-            Object.entries(CONFIG.SHEETS).forEach(([sheetId, sheetConfig]) => {
-                const tab = document.querySelector(`.sheet-tab[data-panel="${sheetId}"]`);
-                const panel = document.getElementById(`panel-${sheetId}`);
-                if (!tab || !panel) return;
-
-                const isEnabled = sheetConfig.enabled !== false;
-                tab.hidden = !isEnabled;
-                panel.hidden = !isEnabled;
-                tab.classList.remove('only-visible');
-
-                if (isEnabled) {
-                    enabledSheetIds.push(sheetId);
-                } else {
-                    panel.querySelectorAll('[data-sheet-toggle]').forEach(input => {
-                        input.checked = false;
-                        input.indeterminate = false;
-                    });
-                }
+            taskSheets.forEach((_, sheetId) => {
+                enabledSheetIds.push(sheetId);
+                document.querySelector(`.sheet-tab[data-panel="${sheetId}"]`)?.classList.remove('only-visible');
             });
 
             const nextActiveId = enabledSheetIds.includes(activePanelId)
@@ -389,46 +442,34 @@
 
         function bindSidebarEvents() {
             const sidebar = document.getElementById('sidebar-ui');
+            document.getElementById('sheet-tabs').addEventListener('click', event => {
+                const button = event.target.closest('.sheet-tab');
+                if (!button || button.hidden) return;
+                const selectedId = button.dataset.panel;
+                const isSameOpenPanel = sidebar.classList.contains('open') && activePanelId === selectedId;
+                if (isSameOpenPanel) {
+                    sidebar.classList.remove('open');
+                    return;
+                }
+                activePanelId = selectedId;
+                sidebar.classList.add('open');
+                document.querySelectorAll('.sheet-tab').forEach(tab => tab.classList.toggle('active', tab.dataset.panel === selectedId));
+                document.querySelectorAll('.sheet-panel').forEach(panel => panel.classList.toggle('active', panel.id === `panel-${selectedId}`));
+            });
+
             sidebar.addEventListener('change', event => {
                 const target = event.target;
                 if (target.matches('[data-sheet-toggle]') && target.checked) {
                     deactivateOtherSheetToggles(target.dataset.sheetToggle);
                 }
+                if (target.id === 'fault-sheet-enabled') {
+                    document.querySelectorAll('input[data-client]').forEach(input => { input.checked = target.checked; });
+                    target.indeterminate = false;
+                } else if (target.matches('input[data-client]')) {
+                    syncFaultSheetToggle();
+                }
+                updateFilters();
             }, true);
-
-            document.querySelectorAll('.sheet-tab').forEach(button => {
-                button.addEventListener('click', () => {
-                    const selectedId = button.dataset.panel;
-                    const isSameOpenPanel = sidebar.classList.contains('open') && activePanelId === selectedId;
-                    if (isSameOpenPanel) {
-                        sidebar.classList.remove('open');
-                        return;
-                    }
-                    activePanelId = selectedId;
-                    sidebar.classList.add('open');
-                    document.querySelectorAll('.sheet-tab').forEach(tab => tab.classList.toggle('active', tab.dataset.panel === selectedId));
-                    document.querySelectorAll('.sheet-panel').forEach(panel => panel.classList.toggle('active', panel.id === `panel-${selectedId}`));
-                });
-            });
-
-            document.getElementById('fault-sheet-enabled').addEventListener('change', event => {
-                const shouldEnable = event.target.checked;
-                document.querySelectorAll('input[data-client]').forEach(input => { input.checked = shouldEnable; });
-                event.target.checked = shouldEnable;
-                event.target.indeterminate = false;
-                updateFilters();
-            });
-            document.querySelectorAll('input[data-client]').forEach(input => input.addEventListener('change', event => {
-                syncFaultSheetToggle();
-                updateFilters();
-            }));
-            document.getElementById('toss-sheet-enabled').addEventListener('change', event => {
-                syncFaultSheetToggle();
-                updateFilters();
-            });
-            ['chk-day', 'chk-night', 'chk-late', 'show-fault-labels', 'show-toss-completed', 'show-toss-excluded', 'show-toss-labels'].forEach(id => {
-                document.getElementById(id).addEventListener('change', updateFilters);
-            });
         }
 
         function bindSearchEvents() {
@@ -517,8 +558,8 @@
             });
         }
 
-        function findTossHeaderRow(table) {
-            const aliases = CONFIG.TOSS_HEADER_ALIASES;
+        function findTaskHeaderRow(table) {
+            const aliases = CONFIG.TASK_HEADER_ALIASES;
             const columnCount = table.cols.length;
             const scanLimit = Math.min(table.rows.length, 10);
 
@@ -544,37 +585,34 @@
             return null;
         }
 
-        function processTossTable(table) {
-            const tossClientObj = CONFIG.CLIENTS.find(client => client.id === 'toss');
-            const detectedHeader = findTossHeaderRow(table);
+        function processTaskTable(table, sheetConfig) {
+            const taskClientObj = { id: sheetConfig.id, name: sheetConfig.name, color: sheetConfig.color, icon: '', width: 30, height: 30 };
+            const detectedHeader = findTaskHeaderRow(table);
             if (!detectedHeader) {
-                setSheetStatus('toss', '점포코드·점포명·위도·경도가 있는 헤더 행을 찾을 수 없습니다.');
-                console.error('토스페이 시트 헤더 행 탐색 실패');
+                setSheetStatus(sheetConfig.id, '3행에서 점포코드·점포명·위도·경도 시스템 헤더를 찾을 수 없습니다.');
+                console.error(`${sheetConfig.name} 시트 헤더 행 탐색 실패`);
                 return;
             }
 
             const rawHeaders = detectedHeader.headers;
-            const aliases = CONFIG.TOSS_HEADER_ALIASES;
+            const fallbackLabelRow = detectedHeader.rowIndex > 0 ? table.rows[detectedHeader.rowIndex - 1] : null;
+            const displayLabels = rawHeaders.map((_, index) => {
+                const manifestLabel = Array.isArray(sheetConfig.displayLabels) ? String(sheetConfig.displayLabels[index] || '').trim() : '';
+                if (Array.isArray(sheetConfig.displayLabels)) return manifestLabel;
+                if (!fallbackLabelRow) return '';
+                const label = getCellFormatted(fallbackLabelRow, index);
+                return label === '-' ? '' : label;
+            });
+            const aliases = CONFIG.TASK_HEADER_ALIASES;
             const schema = {
                 code: findHeaderIndex(rawHeaders, aliases.code),
                 name: findHeaderIndex(rawHeaders, aliases.name),
                 address: findHeaderIndex(rawHeaders, aliases.address),
                 installDate: findHeaderIndex(rawHeaders, aliases.installDate),
+                workStatus: findHeaderIndex(rawHeaders, aliases.workStatus),
                 lat: findHeaderIndex(rawHeaders, aliases.lat),
                 lng: findHeaderIndex(rawHeaders, aliases.lng)
             };
-
-            const firstCoordinateIndex = Math.min(schema.lat, schema.lng);
-            if (schema.installDate < 0) {
-                schema.installDate = CONFIG.SHEETS.toss.installDateColumn;
-            }
-
-            const headers = rawHeaders.map((header, index) => {
-                if (header) return header;
-                if (index === CONFIG.SHEETS.toss.workStatusColumn) return '설치완료일';
-                if (index === schema.installDate) return '설치 예정일';
-                return `${columnLetter(index)}열`;
-            });
 
             let validCoordinateCount = 0;
             table.rows.slice(detectedHeader.rowIndex + 1).forEach(row => {
@@ -582,32 +620,36 @@
                 const code = getCellRaw(row, schema.code);
                 const name = getCellRaw(row, schema.name);
                 const addr = getCellFormatted(row, schema.address);
-                const workStatusRaw = getCellRaw(row, CONFIG.SHEETS.toss.workStatusColumn);
-                const workStatusFormatted = getCellFormatted(row, CONFIG.SHEETS.toss.workStatusColumn);
-                const workState = getTossWorkState(workStatusRaw, workStatusFormatted);
-                const lat = parseFloat(row.c[schema.lat]?.v);
-                const lng = parseFloat(row.c[schema.lng]?.v);
+                const workStatusRaw = getCellRaw(row, schema.workStatus);
+                const workStatusFormatted = getCellFormatted(row, schema.workStatus);
+                const workState = getTaskWorkState(workStatusRaw, workStatusFormatted);
+                const lat = parseFloat(getCellRaw(row, schema.lat));
+                const lng = parseFloat(getCellRaw(row, schema.lng));
                 if (code === '-' || name === '-' || Number.isNaN(lat) || Number.isNaN(lng)) return;
                 validCoordinateCount++;
 
                 const detailFields = [];
-                for (let index = 2; index < firstCoordinateIndex; index++) {
-                    detailFields.push({ label: headers[index] || `${columnLetter(index)}열`, value: getCellFormatted(row, index) });
-                }
+                displayLabels.forEach((label, index) => {
+                    if ([schema.code, schema.name, schema.lat, schema.lng].includes(index)) return;
+                    // 2행 표시명 또는 3행 시스템 헤더가 비어 있으면 지도 정보창에서는 숨깁니다.
+                    if (!label || !String(rawHeaders[index] || '').trim()) return;
+                    detailFields.push({ label, value: getCellFormatted(row, index) });
+                });
 
                 const installDateRaw = getCellRaw(row, schema.installDate);
                 const installDateParsed = parseDateTime(installDateRaw);
-                const storeKey = `toss:${code}`;
+                const storeKey = `${sheetConfig.id}:${code}`;
                 masterStoreData.set(storeKey, {
-                    sheetId: 'toss',
+                    sheetId: sheetConfig.id,
+                    sheetName: sheetConfig.name,
                     storeKey,
                     code,
                     name,
                     addr,
                     lat,
                     lng,
-                    clientObj: tossClientObj,
-                    dataType: 'toss',
+                    clientObj: taskClientObj,
+                    dataType: 'task',
                     workState,
                     workStatus: workStatusFormatted,
                     records: [{ datePart: installDateParsed.datePart, rawDateStr: installDateParsed.rawDateStr, detailFields }]
@@ -615,12 +657,13 @@
             });
 
             if (validCoordinateCount === 0) {
-                console.warn('토스페이 시트에 위도·경도가 모두 입력된 데이터 행이 없습니다.');
+                setSheetStatus(sheetConfig.id, '위도·경도가 모두 입력된 데이터 행이 없습니다.');
+                console.warn(`${sheetConfig.name} 시트에 위도·경도가 모두 입력된 데이터 행이 없습니다.`);
             }
         }
 
         function getStoreMarkerColor(store) {
-            if (store.sheetId !== 'toss') return store.clientObj.color;
+            if (store.dataType !== 'task') return store.clientObj.color;
             if (store.workState === 'completed') return '#1b5e20';
             if (store.workState === 'excluded') return '#888888';
             return store.clientObj.color;
@@ -630,11 +673,11 @@
             masterStoreData.forEach(store => {
                 let markerContent;
                 let markerAnchor;
-                const labelClass = store.sheetId === 'toss' ? 'marker-label-toss' : 'marker-label-fault';
+                const labelClass = store.dataType === 'task' ? 'marker-label-task' : 'marker-label-fault';
                 const markerColor = getStoreMarkerColor(store);
-                if (store.clientObj.id === 'con' || store.clientObj.id === 'toss') {
+                if (store.clientObj.id === 'con' || store.dataType === 'task') {
                     const pinSize = 30;
-                    markerContent = `<div style="position:relative;display:flex;flex-direction:column;align-items:center"><svg width="${pinSize}" height="${pinSize}" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22C12 22 19 14.25 19 9C19 5.13 15.87 2 12 2Z" fill="${markerColor}" stroke="white" stroke-width="1.5"/><circle cx="12" cy="9" r="3" fill="white"/></svg><div class="marker-label ${labelClass}" style="border-color:${markerColor};top:100%;margin-top:2px">${escapeHtml(store.name)}</div></div>`;
+                    markerContent = `<div style="position:relative;display:flex;flex-direction:column;align-items:center"><svg width="${pinSize}" height="${pinSize}" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22C12 22 19 14.25 19 9C19 5.13 15.87 2 12 2Z" fill="${markerColor}" stroke="white" stroke-width="1.5"/><circle cx="12" cy="9" r="3" fill="white"/></svg><div class="marker-label ${labelClass}" data-task-sheet="${escapeHtml(store.sheetId)}" style="border-color:${markerColor};top:100%;margin-top:2px">${escapeHtml(store.name)}</div></div>`;
                     markerAnchor = new naver.maps.Point(pinSize / 2, pinSize);
                 } else {
                     const style = `width:${store.clientObj.width}px;height:${store.clientObj.height}px;object-fit:contain;vertical-align:bottom`;
@@ -682,10 +725,10 @@
                 'hide-fault-labels',
                 !document.getElementById('show-fault-labels').checked || !zoomAllowsLabels
             );
-            mapElement.classList.toggle(
-                'hide-toss-labels',
-                !document.getElementById('show-toss-labels').checked || !zoomAllowsLabels
-            );
+            document.querySelectorAll('.marker-label-task').forEach(label => {
+                const checkbox = document.getElementById(`${label.dataset.taskSheet}-show-labels`);
+                label.style.opacity = zoomAllowsLabels && checkbox?.checked ? '1' : '0';
+            });
         }
 
         function openStoreInfo(marker) {
@@ -712,7 +755,7 @@
                 </div>`;
 
             let recordsHtml = '';
-            if (store.dataType === 'toss') {
+            if (store.dataType === 'task') {
                 const fields = store.records[0].detailFields;
                 const fieldsHtml = fields.length ? fields.map(field => `
                     <div class="info-item">
@@ -744,27 +787,33 @@
             });
             naver.maps.Event.addListener(naverMap, 'zoom_changed', updateMarkerLabelVisibility);
 
+            let manifest = [];
+            try {
+                manifest = await loadTaskSheetManifest();
+            } catch (error) {
+                console.error(error);
+            }
+            taskManifestSignature = getTaskManifestSignature(manifest);
+            renderTaskSheetSidebar(manifest);
             applySheetAvailability();
             faultDatePicker = flatpickr('#fault-date-picker', { mode: 'multiple', locale: 'ko', dateFormat: 'Y-m-d', onChange: updateFilters });
-            tossDatePicker = flatpickr('#toss-date-picker', { mode: 'multiple', locale: 'ko', dateFormat: 'Y-m-d', onChange: updateFilters });
+            taskSheets.forEach((_, sheetId) => {
+                taskDatePickers.set(sheetId, flatpickr(`#${sheetId}-date-picker`, { mode: 'multiple', locale: 'ko', dateFormat: 'Y-m-d', onChange: updateFilters }));
+            });
             bindSidebarEvents();
             bindSearchEvents();
 
             const baseUrl = `https://docs.google.com/spreadsheets/d/${CONFIG.SHEET_ID}/gviz/tq?tqx=out:json`;
             const faultUrl = `${baseUrl}&sheet=${encodeURIComponent(CONFIG.SHEETS.fault.name)}&range=${encodeURIComponent(CONFIG.SHEETS.fault.range)}`;
-            // GViz가 상단 빈 행을 생략하므로 A1부터 받아 필수 헤더가 있는 행을 자동 탐색합니다.
-            const tossRange = `A1:${CONFIG.SHEETS.toss.lastColumn}`;
-            const tossUrl = `${baseUrl}&sheet=${encodeURIComponent(CONFIG.SHEETS.toss.name)}&range=${encodeURIComponent(tossRange)}&headers=0`;
             const faultRequest = CONFIG.SHEETS.fault.enabled === false
                 ? Promise.resolve({ cols: [], rows: [] })
                 : fetchGviz(faultUrl, CONFIG.SHEETS.fault.name);
-            const tossRequest = CONFIG.SHEETS.toss.enabled === false
-                ? Promise.resolve({ cols: [], rows: [] })
-                : fetchGviz(tossUrl, CONFIG.SHEETS.toss.name);
-            const [faultResult, tossResult] = await Promise.allSettled([
-                faultRequest,
-                tossRequest
-            ]);
+            // A1 체크박스, 2행 표시명, 3행 시스템 헤더를 함께 읽습니다.
+            const taskRequests = Array.from(taskSheets.values()).map(sheet => {
+                const url = `${baseUrl}&sheet=${encodeURIComponent(sheet.name)}&range=${encodeURIComponent('A1:ZZ')}&headers=0`;
+                return fetchGviz(url, sheet.name);
+            });
+            const [faultResult, ...taskResults] = await Promise.allSettled([faultRequest, ...taskRequests]);
 
             const coordTracker = {};
             if (CONFIG.SHEETS.fault.enabled !== false && faultResult.status === 'fulfilled') {
@@ -773,17 +822,20 @@
                 console.error(faultResult.reason);
                 setSheetStatus('fault', faultResult.reason.message || String(faultResult.reason));
             }
-            if (CONFIG.SHEETS.toss.enabled !== false && tossResult.status === 'fulfilled') {
-                processTossTable(tossResult.value);
-            } else if (CONFIG.SHEETS.toss.enabled !== false) {
-                console.error(tossResult.reason);
-                setSheetStatus('toss', tossResult.reason.message || String(tossResult.reason));
-            }
+            Array.from(taskSheets.values()).forEach((sheet, index) => {
+                const result = taskResults[index];
+                if (result?.status === 'fulfilled') processTaskTable(result.value, sheet);
+                else if (result?.status === 'rejected') {
+                    console.error(result.reason);
+                    setSheetStatus(sheet.id, result.reason.message || String(result.reason));
+                }
+            });
 
             createMarkers();
             initializeMarkerClustering();
             syncFaultSheetToggle();
             updateFilters();
+            watchTaskSheetManifest();
         }
 
         window.handleSelectGeo = (coreName, lat, lng) => {
@@ -802,14 +854,14 @@
             document.getElementById('autocomplete-list').style.display = 'none';
             isSearchMode = true;
 
-            if (store.sheetId === 'toss') {
-                deactivateOtherSheetToggles('toss');
-                document.getElementById('toss-sheet-enabled').checked = true;
+            if (store.dataType === 'task') {
+                deactivateOtherSheetToggles(store.sheetId);
+                document.getElementById(`${store.sheetId}-sheet-enabled`).checked = true;
                 if (store.workState === 'completed') {
-                    document.getElementById('show-toss-completed').checked = true;
+                    document.getElementById(`${store.sheetId}-show-completed`).checked = true;
                 }
                 if (store.workState === 'excluded') {
-                    document.getElementById('show-toss-excluded').checked = true;
+                    document.getElementById(`${store.sheetId}-show-excluded`).checked = true;
                 }
                 syncFaultSheetToggle();
             } else {
@@ -826,39 +878,37 @@
         };
 
         function updateFilters() {
-            if (!faultDatePicker || !tossDatePicker) return;
+            if (!faultDatePicker) return;
             if (activeInfoWindow) { activeInfoWindow.close(); activeInfoWindow = null; }
 
             const activeClients = CONFIG.SHEETS.fault.enabled === false
                 ? []
                 : Array.from(document.querySelectorAll('input[data-client]:checked')).map(element => element.dataset.client);
-            const tossEnabled = CONFIG.SHEETS.toss.enabled !== false && document.getElementById('toss-sheet-enabled').checked;
             const faultDates = faultDatePicker.selectedDates.map(date => flatpickr.formatDate(date, 'Y-m-d'));
-            const tossDates = tossDatePicker.selectedDates.map(date => flatpickr.formatDate(date, 'Y-m-d'));
             const showDay = document.getElementById('chk-day').checked;
             const showNight = document.getElementById('chk-night').checked;
             const showLate = document.getElementById('chk-late').checked;
-            const showTossCompleted = document.getElementById('show-toss-completed').checked;
-            const showTossExcluded = document.getElementById('show-toss-excluded').checked;
             const searchQuery = isSearchMode ? document.getElementById('address-input').value.trim().toLowerCase() : '';
 
-            let visibleFaultStores = 0;
-            let visibleTossStores = 0;
             let visibleFaultRecords = 0;
+            const visibleTaskStores = new Map(Array.from(taskSheets.keys()).map(sheetId => [sheetId, 0]));
             const filteredMarkers = [];
 
             allMarkers.forEach(marker => {
                 const store = marker.get('storeData');
-                const sheetEnabled = store.sheetId === 'toss' ? tossEnabled : activeClients.includes(store.clientObj.id);
+                const sheetEnabled = store.dataType === 'task'
+                    ? Boolean(document.getElementById(`${store.sheetId}-sheet-enabled`)?.checked)
+                    : activeClients.includes(store.clientObj.id);
                 if (!sheetEnabled) return;
 
                 const searchMatches = !searchQuery || store.name.toLowerCase().includes(searchQuery) || store.code.toLowerCase().includes(searchQuery) || store.addr.toLowerCase().includes(searchQuery);
                 if (!searchMatches) return;
 
-                if (store.dataType === 'toss') {
-                    if (store.workState === 'completed' && !showTossCompleted) return;
-                    if (store.workState === 'excluded' && !showTossExcluded) return;
-                    store.validRecords = store.records.filter(record => tossDates.length === 0 || tossDates.includes(record.datePart));
+                if (store.dataType === 'task') {
+                    if (store.workState === 'completed' && !document.getElementById(`${store.sheetId}-show-completed`)?.checked) return;
+                    if (store.workState === 'excluded' && !document.getElementById(`${store.sheetId}-show-excluded`)?.checked) return;
+                    const selectedDates = taskDatePickers.get(store.sheetId)?.selectedDates.map(date => flatpickr.formatDate(date, 'Y-m-d')) || [];
+                    store.validRecords = store.records.filter(record => selectedDates.length === 0 || selectedDates.includes(record.datePart));
                 } else {
                     store.validRecords = store.records.filter(record => {
                         const dateMatches = faultDates.length === 0 || faultDates.includes(record.datePart);
@@ -870,9 +920,8 @@
                 if (!store.validRecords.length) return;
                 store.validRecords.sort((a, b) => new Date(a.rawDateStr) - new Date(b.rawDateStr));
                 filteredMarkers.push(marker);
-                if (store.sheetId === 'toss') visibleTossStores++;
+                if (store.dataType === 'task') visibleTaskStores.set(store.sheetId, (visibleTaskStores.get(store.sheetId) || 0) + 1);
                 else {
-                    visibleFaultStores++;
                     visibleFaultRecords += store.validRecords.length;
                 }
             });
@@ -885,7 +934,10 @@
             }
 
             document.getElementById('fault-record-count').textContent = `해당 기간 내 장애내역 ${visibleFaultRecords}건 조회`;
-            document.getElementById('toss-store-count').textContent = `설치점포 ${visibleTossStores}개 조회`;
+            visibleTaskStores.forEach((count, sheetId) => {
+                const element = document.getElementById(`${sheetId}-store-count`);
+                if (element) element.textContent = `설치점포 ${count}개 조회`;
+            });
             updateMarkerLabelVisibility();
         }
 
