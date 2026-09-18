@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>임시작업점포 지도</title>
+    <title>A/S 장애내역 및 임시작업점포 지도</title>
 
     <script type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=enxsrn2016&submodules=geocoder"></script>
     <script type="text/javascript" src="https://navermaps.github.io/maps.js.ncp/docs/js/MarkerClustering.js"></script>
@@ -29,17 +29,17 @@
         .type-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: bold; color: white; flex-shrink: 0; }
         .badge-geo { background: #03C75A; }
 
-        #sheet-tabs { position: absolute; top: 80px; right: 0; z-index: 3100; display: flex; flex-direction: column; gap: 0; transition: right .3s ease-in-out; }
+        #sheet-tabs { position: absolute; top: 80px; right: 0; z-index: 3100; display: flex; flex-direction: column; align-items: stretch; gap: 0; transition: right .3s ease-in-out; }
         #sidebar-ui.open #sheet-tabs { right: var(--panel-width); }
-        .sheet-tab { min-width: 42px; min-height: 72px; padding: 7px 6px; border: 1px solid #d7d7d7; border-right: none; border-radius: 0; background: rgba(255,255,255,.96); color: #777; box-shadow: -3px 2px 8px rgba(0,0,0,.12); cursor: pointer; font: inherit; font-size: 11px; font-weight: 800; writing-mode: vertical-rl; letter-spacing: 1px; }
-        .sheet-tab:first-child { border-radius: 10px 0 0 0; }
-        .sheet-tab:last-child { margin-top: -1px; border-radius: 0 0 0 10px; }
-        .sheet-tab.only-visible { margin-top: 0; border-radius: 10px 0 0 10px; }
+        .sheet-tab { min-width: 42px; min-height: 72px; margin: 0; padding: 7px 6px; border: 1px solid #d7d7d7; border-right: none; border-bottom-width: 0; border-radius: 0; background: rgba(255,255,255,.96); color: #777; box-shadow: -3px 2px 8px rgba(0,0,0,.08); cursor: pointer; font: inherit; font-size: 11px; font-weight: 800; writing-mode: vertical-rl; letter-spacing: 1px; }
+        .sheet-tab:first-child { border-radius: 9px 0 0 0; }
+        .sheet-tab:last-child { border-bottom-width: 1px; border-radius: 0 0 0 9px; }
         .sheet-tab.active { color: #0064ff; border-color: #8eb8ff; background: #edf4ff; }
 
-        .sheet-panel { position: absolute; top: 80px; right: 0; z-index: 3000; box-sizing: border-box; width: var(--panel-width); max-height: calc(100dvh - 130px); overflow-y: auto; visibility: hidden; transform: translateX(calc(100% + 1px)); transition: transform .3s ease-in-out; background: white; padding: clamp(10px, 2.5vw, 15px); border-radius: 0; box-shadow: 0 2px 12px rgba(0,0,0,.15); border: 1px solid #ddd; }
+        .sheet-panel { position: absolute; top: 80px; right: 0; z-index: 3000; box-sizing: border-box; width: var(--panel-width); max-height: calc(100dvh - 130px); overflow-y: auto; visibility: hidden; transform: translateX(calc(100% + 1px)); transition: none; background: white; padding: clamp(10px, 2.5vw, 15px); border-radius: 0; box-shadow: 0 2px 12px rgba(0,0,0,.15); border: 1px solid #ddd; }
         #sidebar-ui .sheet-panel.active { visibility: visible; }
         #sidebar-ui.open .sheet-panel.active { transform: translateX(0); }
+        #sidebar-ui.animating .sheet-panel.active { transition: transform .3s ease-in-out; }
         .panel-heading { display: flex; align-items: center; gap: 7px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #eee; color: #333; font-size: 14px; font-weight: 800; }
         .panel-heading input { margin: 0; }
         .sheet-btn-outer { display: flex; align-items: center; justify-content: center; box-sizing: border-box; width: 100%; min-height: 36px; margin-bottom: 10px; padding: 8px 12px; border-radius: 8px; background: #217346; color: #fff; box-shadow: 0 3px 8px rgba(33,115,70,.22); text-decoration: none; font-size: 12px; font-weight: 800; transition: background-color .18s, box-shadow .18s, transform .18s; }
@@ -142,9 +142,6 @@
         </div>
 
         <section id="panel-fault" class="sheet-panel" aria-label="장애내역 시트 옵션">
-            <a href="https://docs.google.com/spreadsheets/d/1lLt9pPq_BwVz8ITeJpTCDAzOILvo0wZ795aJcQ4hT_w/edit#gid=0" target="_blank" rel="noopener noreferrer" class="sheet-btn-outer">📊 구글 시트 이동</a>
-            <hr class="sheet-link-divider">
-            <label class="panel-heading"><input type="checkbox" id="fault-sheet-enabled" data-sheet-toggle="fault"> 🛠️ 장애내역 전체 표시</label>
             <div id="fault-sheet-status" class="sheet-status"></div>
 
             <div class="control-section-title">🏢 고객사 필터</div>
@@ -351,61 +348,81 @@
             const children = Array.from(document.querySelectorAll('input[data-client]'));
             const checkedCount = children.filter(input => input.checked).length;
             const master = document.getElementById('fault-sheet-enabled');
+            if (!master) return;
             master.checked = checkedCount === children.length;
             master.indeterminate = checkedCount > 0 && checkedCount < children.length;
         }
 
-        function deactivateOtherSheetToggles(activeSheetId) {
-            document.querySelectorAll('[data-sheet-toggle]').forEach(input => {
-                if (input.dataset.sheetToggle !== activeSheetId) {
-                    input.checked = false;
-                    input.indeterminate = false;
-                }
+        function selectSheetPanel(sheetId) {
+            if (!sheetId) return;
+            activePanelId = sheetId;
+            document.querySelectorAll('.sheet-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.panel === sheetId);
             });
+            document.querySelectorAll('.sheet-panel').forEach(panel => {
+                panel.classList.toggle('active', panel.id === `panel-${sheetId}`);
+            });
+        }
+
+        function setSidebarOpen(open) {
+            const sidebar = document.getElementById('sidebar-ui');
+            sidebar.classList.add('animating');
+            window.requestAnimationFrame(() => {
+                sidebar.classList.toggle('open', open);
+            });
+            window.setTimeout(() => sidebar.classList.remove('animating'), 330);
         }
 
         async function loadTaskSheetManifestFromDatabase() {
             const supabase = CONFIG.SUPABASE;
-            const uniqueSheets = new Map();
+            const querySheets = async includeSheetOrder => {
+                const uniqueSheets = new Map();
+                for (let offset = 0; ; offset += supabase.pageSize) {
+                    const query = new URLSearchParams({
+                        select: includeSheetOrder ? 'sheet_gid,sheet_name,sheet_order' : 'sheet_gid,sheet_name',
+                        spreadsheet_id: `eq.${CONFIG.SHEET_ID}`,
+                        is_active: 'eq.true',
+                        order: includeSheetOrder ? 'sheet_order.asc,sheet_gid.asc' : 'sheet_name.asc,sheet_gid.asc',
+                        offset: String(offset),
+                        limit: String(supabase.pageSize)
+                    });
+                    const response = await fetch(`${supabase.url}/rest/v1/${supabase.table}?${query}`, {
+                        headers: {
+                            apikey: supabase.anonKey,
+                            Authorization: `Bearer ${supabase.anonKey}`
+                        },
+                        cache: 'no-store'
+                    });
+                    if (!response.ok) throw new Error(`활성 작업 시트 조회 실패 (${response.status})`);
 
-            for (let offset = 0; ; offset += supabase.pageSize) {
-                const query = new URLSearchParams({
-                    select: 'sheet_gid,sheet_name',
-                    spreadsheet_id: `eq.${CONFIG.SHEET_ID}`,
-                    is_active: 'eq.true',
-                    order: 'sheet_name.asc,sheet_gid.asc',
-                    offset: String(offset),
-                    limit: String(supabase.pageSize)
-                });
-                const response = await fetch(`${supabase.url}/rest/v1/${supabase.table}?${query}`, {
-                    headers: {
-                        apikey: supabase.anonKey,
-                        Authorization: `Bearer ${supabase.anonKey}`
-                    },
-                    cache: 'no-store'
-                });
-                if (!response.ok) {
-                    throw new Error(`활성 작업 시트 조회 실패 (${response.status})`);
+                    const rows = await response.json();
+                    rows.forEach(row => {
+                        const gid = String(row.sheet_gid ?? '').trim();
+                        const name = String(row.sheet_name ?? '').trim();
+                        if (!gid || !name) return;
+                        uniqueSheets.set(gid, {
+                            id: `task-${gid}`,
+                            name,
+                            gid,
+                            order: Number(row.sheet_order) || Number.MAX_SAFE_INTEGER,
+                            url: `https://docs.google.com/spreadsheets/d/${CONFIG.SHEET_ID}/edit#gid=${gid}`
+                        });
+                    });
+                    if (rows.length < supabase.pageSize) break;
                 }
 
-                const rows = await response.json();
-                rows.forEach(row => {
-                    const gid = String(row.sheet_gid ?? '').trim();
-                    const name = String(row.sheet_name ?? '').trim();
-                    if (!gid || !name) return;
-                    uniqueSheets.set(gid, {
-                        id: `task-${gid}`,
-                        name,
-                        gid,
-                        url: `https://docs.google.com/spreadsheets/d/${CONFIG.SHEET_ID}/edit#gid=${gid}`
-                    });
-                });
-                if (rows.length < supabase.pageSize) break;
-            }
+                return Array.from(uniqueSheets.values()).sort((a, b) =>
+                    (a.order - b.order) || a.name.localeCompare(b.name, 'ko-KR', { numeric: true })
+                );
+            };
 
-            return Array.from(uniqueSheets.values()).sort((a, b) =>
-                a.name.localeCompare(b.name, 'ko-KR', { numeric: true })
-            );
+            try {
+                return await querySheets(true);
+            } catch (error) {
+                // sheet_order 열을 적용하기 전에도 지도 자체는 계속 사용할 수 있습니다.
+                console.warn('시트 배치 순서 열을 찾지 못해 명칭 순서로 표시합니다.', error);
+                return querySheets(false);
+            }
         }
 
         async function loadTaskSheetManifest() {
@@ -425,7 +442,7 @@
         }
 
         function getTaskManifestSignature(sheetList) {
-            return JSON.stringify(sheetList.map(sheet => [sheet.id, sheet.name, sheet.displayLabels]));
+            return JSON.stringify(sheetList.map(sheet => [sheet.id, sheet.name, sheet.order, sheet.displayLabels]));
         }
 
         function getTaskColor(sheetId) {
@@ -470,9 +487,6 @@
                 panel.dataset.dynamicTask = 'true';
                 panel.setAttribute('aria-label', `${sheet.name} 시트 옵션`);
                 panel.innerHTML = `
-                    <a href="${escapeHtml(sheet.url)}" target="_blank" rel="noopener noreferrer" class="sheet-btn-outer">📊 구글 시트 이동</a>
-                    <hr class="sheet-link-divider">
-                    <label class="panel-heading"><input type="checkbox" id="${sheet.id}-sheet-enabled" data-sheet-toggle="${sheet.id}" checked> 📍 ${escapeHtml(sheet.name)} 전체 표시</label>
                     <div id="${sheet.id}-sheet-status" class="sheet-status"></div>
                     <div class="control-section-title">📅 설치 예정일 필터</div>
                     <input type="text" id="${sheet.id}-date-picker" class="date-picker" placeholder="날짜 선택">
@@ -494,31 +508,17 @@
             const faultEnabled = CONFIG.SHEETS.fault.enabled !== false;
             faultTab.hidden = !faultEnabled;
             faultPanel.hidden = !faultEnabled;
-            faultTab.classList.remove('only-visible');
             if (faultEnabled) enabledSheetIds.push('fault');
-            else faultPanel.querySelectorAll('[data-sheet-toggle]').forEach(input => { input.checked = false; input.indeterminate = false; });
 
             taskSheets.forEach((_, sheetId) => {
                 enabledSheetIds.push(sheetId);
-                document.querySelector(`.sheet-tab[data-panel="${sheetId}"]`)?.classList.remove('only-visible');
             });
 
             const nextActiveId = enabledSheetIds.includes(activePanelId)
                 ? activePanelId
                 : (enabledSheetIds[0] || null);
-            activePanelId = nextActiveId;
-
-            document.querySelectorAll('.sheet-tab').forEach(tab => {
-                tab.classList.toggle('active', Boolean(nextActiveId) && tab.dataset.panel === nextActiveId);
-            });
-            document.querySelectorAll('.sheet-panel').forEach(panel => {
-                panel.classList.toggle('active', Boolean(nextActiveId) && panel.id === `panel-${nextActiveId}`);
-            });
-
-            if (enabledSheetIds.length === 1) {
-                document.querySelector(`.sheet-tab[data-panel="${enabledSheetIds[0]}"]`)?.classList.add('only-visible');
-            }
-            if (enabledSheetIds.length === 0) sidebar.classList.remove('open');
+            selectSheetPanel(nextActiveId);
+            if (enabledSheetIds.length === 0) setSidebarOpen(false);
         }
 
         function bindSidebarEvents() {
@@ -527,26 +527,19 @@
                 const button = event.target.closest('.sheet-tab');
                 if (!button || button.hidden) return;
                 const selectedId = button.dataset.panel;
-                const isSameOpenPanel = sidebar.classList.contains('open') && activePanelId === selectedId;
-                if (isSameOpenPanel) {
-                    sidebar.classList.remove('open');
+                if (sidebar.classList.contains('open') && activePanelId === selectedId) {
+                    setSidebarOpen(false);
+                    updateFilters();
                     return;
                 }
-                activePanelId = selectedId;
-                sidebar.classList.add('open');
-                document.querySelectorAll('.sheet-tab').forEach(tab => tab.classList.toggle('active', tab.dataset.panel === selectedId));
-                document.querySelectorAll('.sheet-panel').forEach(panel => panel.classList.toggle('active', panel.id === `panel-${selectedId}`));
+                selectSheetPanel(selectedId);
+                setSidebarOpen(true);
+                updateFilters();
             });
 
             sidebar.addEventListener('change', event => {
                 const target = event.target;
-                if (target.matches('[data-sheet-toggle]') && target.checked) {
-                    deactivateOtherSheetToggles(target.dataset.sheetToggle);
-                }
-                if (target.id === 'fault-sheet-enabled') {
-                    document.querySelectorAll('input[data-client]').forEach(input => { input.checked = target.checked; });
-                    target.indeterminate = false;
-                } else if (target.matches('input[data-client]')) {
+                if (target.matches('input[data-client]')) {
                     syncFaultSheetToggle();
                 }
                 updateFilters();
@@ -940,8 +933,7 @@
             isSearchMode = true;
 
             if (store.dataType === 'task') {
-                deactivateOtherSheetToggles(store.sheetId);
-                document.getElementById(`${store.sheetId}-sheet-enabled`).checked = true;
+                selectSheetPanel(store.sheetId);
                 if (store.workState === 'completed') {
                     document.getElementById(`${store.sheetId}-show-completed`).checked = true;
                 }
@@ -950,7 +942,7 @@
                 }
                 syncFaultSheetToggle();
             } else {
-                deactivateOtherSheetToggles('fault');
+                selectSheetPanel('fault');
                 const clientCheckbox = document.querySelector(`input[data-client="${store.clientObj.id}"]`);
                 if (clientCheckbox) clientCheckbox.checked = true;
                 syncFaultSheetToggle();
@@ -982,8 +974,8 @@
             allMarkers.forEach(marker => {
                 const store = marker.get('storeData');
                 const sheetEnabled = store.dataType === 'task'
-                    ? Boolean(document.getElementById(`${store.sheetId}-sheet-enabled`)?.checked)
-                    : activeClients.includes(store.clientObj.id);
+                    ? store.sheetId === activePanelId
+                    : activePanelId === 'fault' && activeClients.includes(store.clientObj.id);
                 if (!sheetEnabled) return;
 
                 const searchMatches = !searchQuery || store.name.toLowerCase().includes(searchQuery) || store.code.toLowerCase().includes(searchQuery) || store.addr.toLowerCase().includes(searchQuery);
