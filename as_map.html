@@ -267,6 +267,11 @@
             return String(value ?? '').toLowerCase().replace(/[\s_\-()[\]{}./]/g, '');
         }
 
+        function isProgressSummaryLabel(value) {
+            const compact = String(value ?? '').replace(/\s+/g, '');
+            return /^(전체|완료|미완료|진행률|대상|점포수)[:：]?\d/.test(compact) || /^\d+(?:\.\d+)?%/.test(compact);
+        }
+
         function findHeaderIndex(headers, aliases) {
             const normalizedAliases = aliases.map(normalizeHeader);
             return headers.findIndex(header => normalizedAliases.includes(normalizeHeader(header)));
@@ -701,7 +706,9 @@
             // 3행 시스템 헤더로 열을 식별하고, 같은 열의 2행 값이 있으면 화면 표시명으로 사용합니다.
             const displayLabels = rawHeaders.map((header, index) => {
                 const customLabel = displayLabelRow ? getCellFormatted(displayLabelRow, index) : '-';
-                return customLabel && customLabel !== '-' ? customLabel : String(header || '').trim();
+                return customLabel && customLabel !== '-' && !isProgressSummaryLabel(customLabel)
+                    ? customLabel
+                    : String(header || '').trim();
             });
             const aliases = CONFIG.TASK_HEADER_ALIASES;
             const schema = {
