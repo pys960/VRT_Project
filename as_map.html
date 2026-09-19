@@ -29,6 +29,13 @@
         .type-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: bold; color: white; flex-shrink: 0; }
         .badge-geo { background: #03C75A; }
 
+        #mylocation-btn { position:absolute; right:18px; bottom:24px; z-index:2600; display:flex; align-items:center; justify-content:center; width:46px; height:46px; padding:0; border:1px solid #cbd5e1; border-radius:50%; background:#fff; color:#334155; box-shadow:0 4px 14px rgba(15,23,42,.22); cursor:pointer; transition:right .3s ease-in-out,transform .16s ease,box-shadow .16s ease; }
+        #mylocation-btn:hover { box-shadow:0 6px 18px rgba(15,23,42,.28); transform:translateY(-1px); }
+        #mylocation-btn:active { transform:scale(.96); }
+        #mylocation-btn svg { width:24px; height:24px; fill:currentColor; }
+        #sidebar-ui.open ~ #mylocation-btn { right:calc(var(--panel-width) + 18px); }
+        @keyframes location-pulse { 0% { transform:scale(.72); opacity:.72; } 70%,100% { transform:scale(1.75); opacity:0; } }
+
         #sheet-tabs { position: absolute; top: 80px; right: 0; z-index: 3100; display: flex; flex-direction: column; align-items: stretch; gap: 0; transition: right .3s ease-in-out; }
         #sidebar-ui.open #sheet-tabs { right: var(--panel-width); }
         .sheet-tab { min-width: 42px; min-height: 72px; margin: 0; padding: 7px 6px; border: 1px solid #d7d7d7; border-right: none; border-bottom-width: 0; border-radius: 9px 0 0 9px; background: rgba(255,255,255,.96); color: #777; box-shadow: -3px 2px 8px rgba(0,0,0,.08); cursor: pointer; font: inherit; font-size: 11px; font-weight: 800; writing-mode: vertical-rl; letter-spacing: 1px; }
@@ -171,6 +178,9 @@
     </div>
 
     <div id="map"></div>
+    <button id="mylocation-btn" type="button" title="현위치로 이동" aria-label="현위치로 이동">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12,8A4,4 0 0,1 16,12A4,4 0 0,1 12,16A4,4 0 0,1 8,12A4,4 0 0,1 12,8M12,10A2,2 0 0,0 10,12A2,2 0 0,0 12,14A2,2 0 0,0 14,12A2,2 0 0,0 12,10M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20A8,8 0 0,0 12,4Z"/></svg>
+    </button>
 
     <script>
         const CONFIG = {
@@ -209,6 +219,7 @@
         let naverMap;
         let markerClustering = null;
         let activeInfoWindow = null;
+        let myLocationMarker = null;
         let masterStoreData = new Map();
         let allMarkers = [];
         let faultDatePicker;
@@ -945,6 +956,31 @@
 
         async function initMap() {
             naverMap = new naver.maps.Map('map', { center: new naver.maps.LatLng(37.5665, 126.9780), zoom: 12, zoomControl: false });
+            document.getElementById('mylocation-btn').onclick = () => {
+                if (!navigator.geolocation) {
+                    alert('이 기기에서는 위치 정보를 사용할 수 없습니다.');
+                    return;
+                }
+                navigator.geolocation.getCurrentPosition(position => {
+                    const currentPosition = new naver.maps.LatLng(position.coords.latitude, position.coords.longitude);
+                    naverMap.setCenter(currentPosition);
+                    naverMap.setZoom(16);
+                    if (!myLocationMarker) {
+                        myLocationMarker = new naver.maps.Marker({
+                            position: currentPosition,
+                            map: naverMap,
+                            icon: {
+                                content: '<div style="position:relative;width:22px;height:22px"><div style="position:absolute;inset:0;background:rgba(0,122,255,.32);border-radius:50%;animation:location-pulse 2s infinite"></div><div style="position:absolute;top:5px;left:5px;width:10px;height:10px;background:#007aff;border:2px solid #fff;border-radius:50%;box-shadow:0 1px 5px rgba(0,0,0,.35)"></div></div>',
+                                anchor: new naver.maps.Point(11, 11)
+                            },
+                            zIndex: 10000
+                        });
+                    } else {
+                        myLocationMarker.setPosition(currentPosition);
+                        myLocationMarker.setMap(naverMap);
+                    }
+                }, () => alert('위치 정보를 가져올 수 없습니다. 기기의 위치 권한을 확인해 주세요.'), { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 });
+            };
             naver.maps.Event.addListener(naverMap, 'click', () => {
                 if (activeInfoWindow) { activeInfoWindow.close(); activeInfoWindow = null; }
                 document.getElementById('autocomplete-list').style.display = 'none';
