@@ -29,11 +29,11 @@
         .type-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: bold; color: white; flex-shrink: 0; }
         .badge-geo { background: #03C75A; }
 
-        #mylocation-btn { position:absolute; right:18px; bottom:24px; z-index:2600; display:flex; align-items:center; justify-content:center; width:46px; height:46px; padding:0; border:1px solid #cbd5e1; border-radius:50%; background:#fff; color:#334155; box-shadow:0 4px 14px rgba(15,23,42,.22); cursor:pointer; transition:right .3s ease-in-out,transform .16s ease,box-shadow .16s ease; }
+        #mylocation-btn { position:absolute; right:45px; bottom:70px; z-index:2600; display:flex; align-items:center; justify-content:center; width:46px; height:46px; padding:0; border:1px solid #cbd5e1; border-radius:50%; background:#fff; color:#334155; box-shadow:0 4px 14px rgba(15,23,42,.22); cursor:pointer; transition:right .3s ease-in-out,transform .16s ease,box-shadow .16s ease; }
         #mylocation-btn:hover { box-shadow:0 6px 18px rgba(15,23,42,.28); transform:translateY(-1px); }
         #mylocation-btn:active { transform:scale(.96); }
         #mylocation-btn svg { width:24px; height:24px; fill:currentColor; }
-        #sidebar-ui.open ~ #mylocation-btn { right:calc(var(--panel-width) + 18px); }
+        #sidebar-ui.open ~ #mylocation-btn { right:calc(var(--panel-width) + 45px); }
         @keyframes location-pulse { 0% { transform:scale(.72); opacity:.72; } 70%,100% { transform:scale(1.75); opacity:0; } }
 
         #sheet-tabs { position: absolute; top: 80px; right: 0; z-index: 3100; display: flex; flex-direction: column; align-items: stretch; gap: 0; transition: right .3s ease-in-out; }
