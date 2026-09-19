@@ -34,6 +34,7 @@
         #mylocation-btn:active { transform:scale(.96); }
         #mylocation-btn svg { width:24px; height:24px; fill:currentColor; }
         #sidebar-ui.open ~ #mylocation-btn { right:calc(var(--panel-width) + 45px); }
+        body.embedded #mylocation-btn { bottom:112px; }
         @keyframes location-pulse { 0% { transform:scale(.72); opacity:.72; } 70%,100% { transform:scale(1.75); opacity:0; } }
 
         #sheet-tabs { position: absolute; top: 80px; right: 0; z-index: 3100; display: flex; flex-direction: column; align-items: stretch; gap: 0; transition: right .3s ease-in-out; }
@@ -183,6 +184,7 @@
     </button>
 
     <script>
+        if (new URLSearchParams(window.location.search).get('embedded') === '1') document.body.classList.add('embedded');
         const CONFIG = {
             SHEET_ID: '1lLt9pPq_BwVz8ITeJpTCDAzOILvo0wZ795aJcQ4hT_w',
             // GitHub Pages에서는 google.script.run을 사용할 수 없으므로
